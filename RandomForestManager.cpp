@@ -64,11 +64,28 @@ void prepFeatureVector(RandomForestManager *randomForestManager, float* features
 
 int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector)
 {
-    cv::Mat readings = cv::Mat::zeros(1, 7, CV_32F);
+    cv::Mat readings = cv::Mat::zeros(1, RANDOM_FOREST_VECTOR_SIZE, CV_32F);
 
     prepFeatureVector(randomForestManager, readings.ptr<float>(), magnitudeVector);
     
     return (int)randomForestManager->model->predict(readings, cv::noArray(), cv::ml::DTrees::PREDICT_MAX_VOTE);
+}
+
+#include <iostream>
+using namespace std;
+
+void randomForestClassificationConfidences(RandomForestManager *randomForestManager, float *magnitudeVector, float *confidences, int n_classes) {
+    cv::Mat readings = cv::Mat::zeros(1, RANDOM_FOREST_VECTOR_SIZE, CV_32F);
+
+    prepFeatureVector(randomForestManager, readings.ptr<float>(), magnitudeVector);
+
+    cv::Mat results;
+
+    randomForestManager->model->predictProb(readings, results, cv::ml::DTrees::PREDICT_CONFIDENCE);
+
+    for (int i = 0; i < n_classes; ++i) {
+        confidences[i] = results.at<float>(i);
+    }
 }
 
 float max(cv::Mat mat)

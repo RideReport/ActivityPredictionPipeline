@@ -27,7 +27,10 @@ randomforestmanager.oo: RandomForestManager.cpp
 fftmanager.oo: FFTManager.cpp
 	$(COMPILE)
 
-.PHONY: clean
+.PHONY: clean install
 
 clean:
 	rm *.oo *.o *.so
+
+install:
+	cp rr_mode_classification.so ../

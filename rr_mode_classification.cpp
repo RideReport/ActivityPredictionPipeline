@@ -37,7 +37,22 @@ public:
         return randomForesetClassifyMagnitudeVector(_manager, normsVector.data());
     }
 
-    list prepareFeatures(boost::python::list& norms) {
+    list predict_proba(list& norms) {
+        const int N_CLASSES = 4;
+        _checkNorms(norms);
+        stl_input_iterator<float> begin(norms), end;
+        auto normsVec = vector<float>(begin, end);
+        auto confidences = vector<float>(N_CLASSES);
+        randomForestClassificationConfidences(_manager, normsVec.data(), confidences.data(), N_CLASSES);
+
+        list ret;
+        for (float value : confidences) {
+            ret.append(value);
+        }
+        return ret;
+    }
+
+    list prepareFeatures(list& norms) {
         _checkNorms(norms);
 
         stl_input_iterator<float> begin(norms), end;
@@ -72,6 +87,7 @@ BOOST_PYTHON_MODULE(rr_mode_classification)
     class_<RandomForest>("RandomForest", init<int, std::string>())
         .def("classify", &RandomForest::classify)
         .def("prepareFeatures", &RandomForest::prepareFeatures)
+        .def("predict_proba", &RandomForest::predict_proba)
     ;
 }
 
