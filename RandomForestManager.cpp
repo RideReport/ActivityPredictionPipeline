@@ -44,26 +44,29 @@ void deleteRandomForestManager(RandomForestManager *r)
     free(r);
 }
 
-int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector)
-{
-    cv::Mat mags = cv::Mat(randomForestManager->sampleSize, 1, CV_32F, &magnitudeVector);
-    
-    cv::Mat readings = cv::Mat::zeros(1, 7, CV_32F);
-
+void prepFeatureVector(RandomForestManager *randomForestManager, float* features, float* mags_raw) {
     cv::Scalar mean,stddev;
+    cv::Mat mags = cv::Mat(randomForestManager->sampleSize, 1, CV_32F, mags_raw);
     meanStdDev(mags,mean,stddev);
     
     float *fftOutput = new float[randomForestManager->sampleSize];
-    fft(magnitudeVector, randomForestManager->sampleSize, fftOutput, randomForestManager->fftManager);
+    fft(mags_raw, randomForestManager->sampleSize, fftOutput, randomForestManager->fftManager);
     float maxPower = dominantPower(fftOutput, randomForestManager->sampleSize);
-    
-    readings.at<float>(0,0) = max(mags);
-    readings.at<float>(0,1) = (float)mean.val[0];
-    readings.at<float>(0,2) = maxMean(mags, 5);
-    readings.at<float>(0,3) = (float)stddev.val[0];
-    readings.at<float>(0,4) = (float)skewness(mags);
-    readings.at<float>(0,5) = (float)kurtosis(mags);
-    readings.at<float>(0,6) = maxPower;
+
+    features[0] = max(mags);
+    features[1] = (float)mean.val[0];
+    features[2] = maxMean(mags, 5);
+    features[3] = (float)stddev.val[0];
+    features[4] = (float)skewness(mags);
+    features[5] = (float)kurtosis(mags);
+    features[6] = maxPower;
+}
+
+int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector)
+{
+    cv::Mat readings = cv::Mat::zeros(1, 7, CV_32F);
+
+    prepFeatureVector(randomForestManager, readings.ptr<float>(), magnitudeVector);
     
     return (int)randomForestManager->model->predict(readings, cv::noArray(), cv::ml::DTrees::PREDICT_MAX_VOTE);
 }

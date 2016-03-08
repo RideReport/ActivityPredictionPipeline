@@ -6,11 +6,14 @@
 //  Copyright © 2015 Knock Softwae, Inc. All rights reserved.
 //
 
+#define RANDOM_FOREST_VECTOR_SIZE (7)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
     typedef struct RandomForestManager RandomForestManager;
     RandomForestManager *createRandomForestManager(int sampleSize, const char* pathToModelFile);
+    void prepFeatureVector(RandomForestManager *randomForestManager, float *features, float *magnitudes);
     void deleteRandomForestManager(RandomForestManager *r);
     int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector);
 #ifdef __cplusplus
