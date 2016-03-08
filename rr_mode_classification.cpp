@@ -26,7 +26,7 @@ public:
         }
     }
     ~RandomForest() {
-        //deleteRandomForestManager(_manager);
+        deleteRandomForestManager(_manager);
     }
     int classify(boost::python::list& norms) {
         _checkNorms(norms);
