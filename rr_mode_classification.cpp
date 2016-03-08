@@ -11,16 +11,6 @@ using namespace std;
 
 // TODO: try vector_indexing_suite
 
-char const* greet(unsigned x)
-{
-    static char const* msgs[] = { "hello", "boost", "world" };
-    if (x > 2) {
-        throw std::range_error("greet: index out of range");
-    }
-
-    return msgs[x];
-}
-
 class RandomForest {
 public:
     RandomForest(int sampleSize, std::string pathToModelFile) {
@@ -77,7 +67,7 @@ protected:
 };
 
 
-BOOST_PYTHON_MODULE(main)
+BOOST_PYTHON_MODULE(rr_mode_classification)
 {
     class_<RandomForest>("RandomForest", init<int, std::string>())
         .def("classify", &RandomForest::classify)

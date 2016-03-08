@@ -13,7 +13,7 @@ CFLAGS = -std=c++11
 COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -o $@ -c $<
  
 # compile mesh classes
-TARGET = main
+TARGET = rr_mode_classification
  
 $(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo
 	g++ -shared -Wl,--export-dynamic $^ -L$(BOOST_LIB) -L/usr/lib/python$(PYTHON_VERSION)/config -lboost_python -lpython$(PYTHON_VERSION) -lopencv_core -lopencv_ml -o $(TARGET).so
