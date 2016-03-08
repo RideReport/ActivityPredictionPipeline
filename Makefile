@@ -15,13 +15,16 @@ COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -o $@ -c $<
 # compile mesh classes
 TARGET = main
  
-$(TARGET).so: $(TARGET).o randomforestmanager.oo
+$(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo
 	g++ -shared -Wl,--export-dynamic $^ -L$(BOOST_LIB) -L/usr/lib/python$(PYTHON_VERSION)/config -lboost_python -lpython$(PYTHON_VERSION) -lopencv_core -lopencv_ml -o $(TARGET).so
 	
 $(TARGET).o: $(TARGET).cpp
 	$(COMPILE)
 
 randomforestmanager.oo: RandomForestManager.cpp
+	$(COMPILE)
+
+fftmanager.oo: FFTManager.cpp
 	$(COMPILE)
 
 .PHONY: clean

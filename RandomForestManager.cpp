@@ -22,15 +22,14 @@ double kurtosis(cv::Mat mat);
 struct RandomForestManager {
     int sampleSize;
     FFTManager *fftManager;
-    cv::Ptr<cv::ml::RTrees> model = cv::Ptr<cv::ml::RTrees>();
+    cv::Ptr<cv::ml::RTrees> model;
 };
 
 RandomForestManager *createRandomForestManager(int sampleSize, const char* pathToModelFile)
 {
     assert(fmod(log2(sampleSize), 1.0) == 0.0); // sampleSize must be a power of 2
     
-    struct RandomForestManager *r;
-    r = (struct RandomForestManager*) malloc(sizeof(struct RandomForestManager));
+    RandomForestManager *r = new RandomForestManager;
     r->sampleSize = sampleSize;
     r->fftManager = createFFTManager(sampleSize);
     r->model = cv::ml::RTrees::load<cv::ml::RTrees>(pathToModelFile);
@@ -45,14 +44,18 @@ void deleteRandomForestManager(RandomForestManager *r)
     free(r);
 }
 
-int randomForesetClassifyMagnitudeVector(struct RandomForestManager *randomForestManager, float *magnitudeVector)
+int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector)
 {
     cv::Mat mags = cv::Mat(randomForestManager->sampleSize, 1, CV_32F, &magnitudeVector);
     
-    cv::Mat readings = cv::Mat::zeros(1, 6, CV_32F);
+    cv::Mat readings = cv::Mat::zeros(1, 7, CV_32F);
 
     cv::Scalar mean,stddev;
     meanStdDev(mags,mean,stddev);
+    
+    float *fftOutput = new float[randomForestManager->sampleSize];
+    fft(magnitudeVector, randomForestManager->sampleSize, fftOutput, randomForestManager->fftManager);
+    float maxPower = dominantPower(fftOutput, randomForestManager->sampleSize);
     
     readings.at<float>(0,0) = max(mags);
     readings.at<float>(0,1) = (float)mean.val[0];
@@ -60,6 +63,7 @@ int randomForesetClassifyMagnitudeVector(struct RandomForestManager *randomFores
     readings.at<float>(0,3) = (float)stddev.val[0];
     readings.at<float>(0,4) = (float)skewness(mags);
     readings.at<float>(0,5) = (float)kurtosis(mags);
+    readings.at<float>(0,6) = maxPower;
     
     return (int)randomForestManager->model->predict(readings, cv::noArray(), cv::ml::DTrees::PREDICT_MAX_VOTE);
 }

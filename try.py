@@ -1,3 +1,6 @@
 import main
-rf = main.RandomForest(32, "yo.cv")
-rf.classify(list(xrange(0, 32)))
+import numpy as np
+rf = main.RandomForest(8, "trained_model.cv")
+print "made rf"
+rf.classify(list(np.arange(0., 8., 1.)))
+print "done"

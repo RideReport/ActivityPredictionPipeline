@@ -1,5 +1,6 @@
 #include <vector>
 #include <string>
+#include <iostream>
 
 #include <boost/python.hpp>
 #include <boost/python/stl_iterator.hpp>
@@ -32,15 +33,17 @@ public:
         }
     }
     ~RandomForest() {
-        deleteRandomForestManager(_manager);
+        //deleteRandomForestManager(_manager);
     }
     int classify(boost::python::list& norms) {
         if (len(norms) != _sampleSize) {
             throw std::length_error("Cannot classify vector with length that does not match sample size");
         }
+
         // Convert from list to vector
         stl_input_iterator<float> begin(norms), end;
         auto normsVector = vector<float>(begin, end);
+        cout << "yo" << endl;
         return randomForesetClassifyMagnitudeVector(_manager, normsVector.data());
     }
 

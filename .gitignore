@@ -1,3 +1,4 @@
 *.oo
 *.o
 *.so
+trained_model.cv
