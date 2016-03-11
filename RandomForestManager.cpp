@@ -78,10 +78,10 @@ int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManage
     return (int)randomForestManager->model->predict(features, cv::noArray(), cv::ml::DTrees::PREDICT_MAX_VOTE);
 }
 
-void randomForestClassificationConfidences(RandomForestManager *randomForestManager, float *magnitudeVector, float *confidences, int n_classes) {
+void randomForestClassificationConfidences(RandomForestManager *randomForestManager, float *magnitudeVector, float *speedVector, int speedVectorCount, float *confidences, int n_classes) {
     cv::Mat features = cv::Mat::zeros(1, RANDOM_FOREST_VECTOR_SIZE, CV_32F);
 
-    prepFeatureVector(randomForestManager, features.ptr<float>(), magnitudeVector);
+    prepFeatureVector(randomForestManager, features.ptr<float>(), magnitudeVector, speedVector, speedVectorCount);
 
     cv::Mat results;
 

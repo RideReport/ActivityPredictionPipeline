@@ -8,6 +8,12 @@
 using namespace boost::python;
 using namespace std;
 
+template<typename T>
+vector<T> vectorFromList(list& l) {
+    stl_input_iterator<T> begin(l), end;
+    auto vec = vector<T>(begin, end);
+    return vec;
+}
 
 // TODO: try vector_indexing_suite
 
@@ -32,22 +38,26 @@ public:
     ~RandomForest() {
         deleteRandomForestManager(_manager);
     }
-    int classify(boost::python::list& norms) {
+    int classify(list& norms, list& speeds) {
         _checkNorms(norms);
 
-        // Convert from list to vector
-        stl_input_iterator<float> begin(norms), end;
-        auto normsVector = vector<float>(begin, end);
-        return randomForesetClassifyMagnitudeVector(_manager, normsVector.data());
+        auto normsVec = vectorFromList<float>(norms);
+        auto speedsVec = vectorFromList<float>(speeds);
+
+        return randomForesetClassifyMagnitudeVector(_manager,
+            normsVec.data(),
+            speedsVec.data(), speedsVec.size());
     }
 
-    list predict_proba(list& norms) {
+    list predict_proba(list& norms, list& speeds) {
         const int N_CLASSES = 4;
         _checkNorms(norms);
-        stl_input_iterator<float> begin(norms), end;
-        auto normsVec = vector<float>(begin, end);
+
+        auto normsVec = vectorFromList<float>(norms);
+        auto speedsVec = vectorFromList<float>(speeds);
+
         auto confidences = vector<float>(N_CLASSES);
-        randomForestClassificationConfidences(_manager, normsVec.data(), confidences.data(), N_CLASSES);
+        randomForestClassificationConfidences( _manager, normsVec.data(), speedsVec.data(), speedsVec.size(), confidences.data(), N_CLASSES);
 
         list ret;
         for (float value : confidences) {
@@ -56,15 +66,15 @@ public:
         return ret;
     }
 
-    list prepareFeatures(list& norms) {
+    list prepareFeatures(list& norms, list& speeds) {
         _checkNorms(norms);
 
-        stl_input_iterator<float> begin(norms), end;
-        auto normsVec = vector<float>(begin, end);
+        auto normsVec = vectorFromList<float>(norms);
+        auto speedsVec = vectorFromList<float>(speeds);
 
         auto featuresVec = vector<float>(RANDOM_FOREST_VECTOR_SIZE, 0.0);
 
-        prepFeatureVector(_manager, featuresVec.data(), normsVec.data());
+        prepFeatureVector(_manager, featuresVec.data(), normsVec.data(), speedsVec.data(), speedsVec.size());
 
         list ret;
         for (float value : featuresVec) {
