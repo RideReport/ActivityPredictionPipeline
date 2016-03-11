@@ -8,7 +8,7 @@ PYTHON_INCLUDE = /usr/include/python$(PYTHON_VERSION)
 BOOST_INC = /usr/include
 BOOST_LIB = /usr/lib/x86_86-linux-gnu
 CC = g++
-CFLAGS = -std=c++11
+CFLAGS = -g -std=c++11
 
 COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -o $@ -c $<
  

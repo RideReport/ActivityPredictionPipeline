@@ -1,10 +1,12 @@
+#include <stdlib.h>
 #include "FFTManager.h"
 
 struct FFTManager {
+    float thing = 0.0;
 };
 
 FFTManager* createFFTManager(int sampleSize) {
-  return new FFTManager;
+  return (struct FFTManager*) malloc(sizeof(struct FFTManager));
 }
 
 void fft(float * input, int inputSize, float *output, FFTManager *manager) {

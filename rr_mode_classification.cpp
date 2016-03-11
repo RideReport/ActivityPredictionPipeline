@@ -24,6 +24,10 @@ public:
         catch (...) {
             PyErr_SetString(PyExc_RuntimeError, "Unknown error");
         }
+        //if (_manager != NULL) {
+        //    cout << "Trying to get class count on manager " << _manager << endl;
+        //    _n_classes = randomForestGetClassCount(_manager);
+        //}
     }
     ~RandomForest() {
         deleteRandomForestManager(_manager);
@@ -69,10 +73,21 @@ public:
         return ret;
     }
 
+    list classLabels() {
+        auto labelsVec = vector<int>(_n_classes, 0);
+        randomForestGetClassLabels(_manager, labelsVec.data(), _n_classes);
+        list ret;
+        for (float value: labelsVec) {
+            ret.append(value);
+        }
+        return ret;
+    }
+
 
 protected:
     RandomForestManager* _manager;
     int _sampleSize;
+    int _n_classes;
 
     void _checkNorms(list& norms) {
         if (len(norms) != _sampleSize) {
@@ -88,6 +103,7 @@ BOOST_PYTHON_MODULE(rr_mode_classification)
         .def("classify", &RandomForest::classify)
         .def("prepareFeatures", &RandomForest::prepareFeatures)
         .def("predict_proba", &RandomForest::predict_proba)
+        .def("classLabels", &RandomForest::classLabels)
     ;
 }
 

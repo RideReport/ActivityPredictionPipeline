@@ -13,6 +13,8 @@
 #include <opencv2/core.hpp>
 #include <opencv2/ml.hpp>
 
+using namespace cv;
+
 // Private Functions
 float max(cv::Mat mat);
 double maxMean(cv::Mat mat, int windowSize);
@@ -79,6 +81,10 @@ void randomForestClassificationConfidences(RandomForestManager *randomForestMana
 
     prepFeatureVector(randomForestManager, readings.ptr<float>(), magnitudeVector);
 
+    cout << "readings " <<  readings << endl;
+    cout << "at 0,5 " << readings.at<float>(0, 5) << endl;
+    cout << "at 0,6 " << readings.at<float>(0, 6) << endl;
+
     cv::Mat results;
 
     randomForestManager->model->predictProb(readings, results, cv::ml::DTrees::PREDICT_CONFIDENCE);
@@ -86,6 +92,19 @@ void randomForestClassificationConfidences(RandomForestManager *randomForestMana
     for (int i = 0; i < n_classes; ++i) {
         confidences[i] = results.at<float>(i);
     }
+}
+
+int randomForestGetClassLabels(RandomForestManager *randomForestManager, int *labels, int n_classes) {
+    Mat labelsMat = randomForestManager->model->getClassLabels();
+    for (int i = 0; i < n_classes && i < labelsMat.rows; ++i) {
+        labels[i] = labelsMat.at<int>(i);
+    }
+    return labelsMat.rows;
+}
+
+int randomForestGetClassCount(RandomForestManager *randomForestManager) {
+    Mat labelsMat = randomForestManager->model->getClassLabels();
+    return labelsMat.rows;
 }
 
 float max(cv::Mat mat)

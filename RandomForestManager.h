@@ -17,6 +17,8 @@ extern "C" {
     void deleteRandomForestManager(RandomForestManager *r);
     int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector);
     void randomForestClassificationConfidences(RandomForestManager *randomForestManager, float *magnitudeVector, float *confidences, int n_classes);
+    int randomForestGetClassCount(RandomForestManager *randomForestManager);
+    int randomForestGetClassLabels(RandomForestManager *randomForestManager, int *labels, int n_classes);
 #ifdef __cplusplus
 }
 #endif
