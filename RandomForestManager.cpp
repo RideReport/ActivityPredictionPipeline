@@ -42,52 +42,50 @@ RandomForestManager *createRandomForestManager(int sampleSize, const char* pathT
 void deleteRandomForestManager(RandomForestManager *r)
 {
     free(r->fftManager);
-    delete r->model;
+    delete(r->model);
     free(r);
 }
 
-void prepFeatureVector(RandomForestManager *randomForestManager, float* features, float* mags_raw) {
-    cv::Scalar mean,stddev;
-    cv::Mat mags = cv::Mat(randomForestManager->sampleSize, 1, CV_32F, mags_raw);
-    meanStdDev(mags,mean,stddev);
+void prepFeatureVector(RandomForestManager *randomForestManager, float* features, float* magnitudeVector, float *speedVector, int speedVectorCount) {
+    cv::Mat mags = cv::Mat(randomForestManager->sampleSize, 1, CV_32F, magnitudeVector);
+    cv::Mat speeds = cv::Mat(speedVectorCount, 1, CV_32F, speedVector);
+
+    cv::Scalar meanMag,stddevMag;
+    meanStdDev(mags,meanMag,stddevMag);
+
+    cv::Scalar meanSpeed,stddevSpeed;
+    meanStdDev(mags,meanSpeed,stddevSpeed);
     
     float *fftOutput = new float[randomForestManager->sampleSize];
-    fft(mags_raw, randomForestManager->sampleSize, fftOutput, randomForestManager->fftManager);
+    fft(magnitudeVector, randomForestManager->sampleSize, fftOutput, randomForestManager->fftManager);
     float maxPower = dominantPower(fftOutput, randomForestManager->sampleSize);
-
+    
     features[0] = max(mags);
-    features[1] = (float)mean.val[0];
+    features[1] = (float)meanMag.val[0];
     features[2] = maxMean(mags, 5);
-    features[3] = (float)stddev.val[0];
+    features[3] = (float)stddevMag.val[0];
     features[4] = (float)skewness(mags);
     features[5] = (float)kurtosis(mags);
     features[6] = maxPower;
+    features[7] = (float)meanSpeed.val[0];
 }
 
-int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector)
+int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector, float *speedVector, int speedVectorCount)
 {
-    cv::Mat readings = cv::Mat::zeros(1, RANDOM_FOREST_VECTOR_SIZE, CV_32F);
-
-    prepFeatureVector(randomForestManager, readings.ptr<float>(), magnitudeVector);
+    cv::Mat features = cv::Mat::zeros(1, RANDOM_FOREST_VECTOR_SIZE, CV_32F);
+    prepFeatureVector(randomForestManager, features.ptr<float>(), magnitudeVector, speedVector, speedVectorCount);
     
-    return (int)randomForestManager->model->predict(readings, cv::noArray(), cv::ml::DTrees::PREDICT_MAX_VOTE);
+    return (int)randomForestManager->model->predict(features, cv::noArray(), cv::ml::DTrees::PREDICT_MAX_VOTE);
 }
-
-#include <iostream>
-using namespace std;
 
 void randomForestClassificationConfidences(RandomForestManager *randomForestManager, float *magnitudeVector, float *confidences, int n_classes) {
-    cv::Mat readings = cv::Mat::zeros(1, RANDOM_FOREST_VECTOR_SIZE, CV_32F);
+    cv::Mat features = cv::Mat::zeros(1, RANDOM_FOREST_VECTOR_SIZE, CV_32F);
 
-    prepFeatureVector(randomForestManager, readings.ptr<float>(), magnitudeVector);
-
-    cout << "readings " <<  readings << endl;
-    cout << "at 0,5 " << readings.at<float>(0, 5) << endl;
-    cout << "at 0,6 " << readings.at<float>(0, 6) << endl;
+    prepFeatureVector(randomForestManager, features.ptr<float>(), magnitudeVector);
 
     cv::Mat results;
 
-    randomForestManager->model->predictProb(readings, results, cv::ml::DTrees::PREDICT_CONFIDENCE);
+    randomForestManager->model->predictProb(features, results, cv::ml::DTrees::PREDICT_CONFIDENCE);
 
     for (int i = 0; i < n_classes; ++i) {
         confidences[i] = results.at<float>(i);
