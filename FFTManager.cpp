@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "FFTManager.h"
 #include <fftw3.h>
+#include <math.h>
 
 
 struct FFTManager {
@@ -55,5 +56,5 @@ float dominantPower(float *output, int inputSize) {
         }
     }
 
-    return max;
+    return sqrt(max);
 }
