@@ -22,7 +22,7 @@ FFTManager1* createFFTManager1(int sampleSize) {
   return _fft;
 }
 
-void fft(float * input, int inputSize, float *output, FFTManager1 *_fft) {
+void fft1(float * input, int inputSize, float *output, FFTManager1 *_fft) {
     if (inputSize != _fft->N) {
         // throw?
         return;
@@ -48,7 +48,7 @@ void deleteFFTManager1(FFTManager1 *_fft) {
     free(_fft);
 }
 
-float dominantPower(float *output, int inputSize) {
+float dominantPower1(float *output, int inputSize) {
     float max = 0.0;
     for (int i = 0; i < inputSize/2; ++i) {
         if (output[i] > max) {

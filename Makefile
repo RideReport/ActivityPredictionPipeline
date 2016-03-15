@@ -16,7 +16,7 @@ COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/
 TARGET = rr_mode_classification
  
 $(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo
-	$(CC) -shared -Wl, -L/usr/local/lib -L/usr/local/Frameworks/Python.framework/Versions/$(PYTHON_VERSION)/lib -lboost_python -lpython$(PYTHON_VERSION) -lopencv_core -lopencv_ml -lfftw3 -lm -o $(TARGET).so $^ 
+	$(CC) -shared -Wl,--export-dynamic $^ -L/usr/local/lib -L/usr/local/Frameworks/Python.framework/Versions/$(PYTHON_VERSION)/lib -lboost_python -lpython$(PYTHON_VERSION) -lopencv_core -lopencv_ml -lfftw3 -lm -o $(TARGET).so
 	
 $(TARGET).o: $(TARGET).cpp
 	$(COMPILE)
@@ -24,7 +24,7 @@ $(TARGET).o: $(TARGET).cpp
 randomforestmanager.oo: RandomForestManager.cpp
 	$(COMPILE)
 
-fftmanager.oo: FFTManager.cpp
+fftmanager.oo: FFTManager1.cpp
 	$(COMPILE)
 
 .PHONY: clean install

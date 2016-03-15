@@ -59,9 +59,7 @@ void prepFeatureVector(RandomForestManager *randomForestManager, float* features
     cv::Scalar meanSpeed,stddevSpeed;
     meanStdDev(mags,meanSpeed,stddevSpeed);
     
-    float *fftOutput = new float[randomForestManager->sampleSize];
-    fft(magnitudeVector, randomForestManager->sampleSize, fftOutput, randomForestManager->fftManager);
-    float maxPower = dominantPower(fftOutput, randomForestManager->sampleSize);
+    float maxPower = dominantPowerOfFFT(randomForestManager, magnitudeVector, randomForestManager->sampleSize, 1);
     
     features[0] = max(mags);
     features[1] = (float)meanMag.val[0];
@@ -73,10 +71,10 @@ void prepFeatureVector(RandomForestManager *randomForestManager, float* features
     features[7] = (float)meanSpeed.val[0];
 }
 
-float dominantPower(RandomForestManager *randomForestManager, float * magnitudeVector, int inputSize, int managerType);
+float dominantPowerOfFFT(RandomForestManager *randomForestManager, float * magnitudeVector, int inputSize, int managerType)
 {
-	float *fft1Output = new float[randomForestManager->sampleSize];
-	if managerType == 1 {
+	float *fftOutput = new float[randomForestManager->sampleSize];
+	if (managerType == 1) {
 		fft1(magnitudeVector, inputSize, fftOutput, randomForestManager->fftManager1);
 	    return dominantPower1(fftOutput, inputSize);
 	} else {
