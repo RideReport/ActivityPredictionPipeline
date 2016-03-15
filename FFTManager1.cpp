@@ -1,15 +1,23 @@
 #include <stdlib.h>
 #include "FFTManager1.h"
 #include <fftw3.h>
+#include <math.h>
 
 
 struct FFTManager1 {
     unsigned int N;
     fftw_complex *in;
     fftw_complex *out;
-    double* outMagsSquared;
+    float* multipliers;
     fftw_plan p;
 };
+
+void setupHammingWindow(float *values, int N) {
+    // See https://en.wikipedia.org/wiki/Hann_function
+    for (int i = 0; i < N; ++i) {
+        values[i] = 0.54 - 0.46 * cos(2*M_PI*i/(N-1));
+    }
+}
 
 FFTManager1* createFFTManager1(int sampleSize) {
   FFTManager1* _fft = (struct FFTManager1*) malloc(sizeof(struct FFTManager1));
@@ -17,6 +25,9 @@ FFTManager1* createFFTManager1(int sampleSize) {
   _fft->in = fftw_alloc_complex(sampleSize);
   _fft->out = fftw_alloc_complex(sampleSize);
   _fft->p = fftw_plan_dft_1d(sampleSize, _fft->in, _fft->out, FFTW_FORWARD, FFTW_MEASURE);
+
+  _fft->multipliers = (float*) malloc(sizeof(float) * sampleSize);
+  setupHammingWindow(_fft->multipliers, sampleSize);
 
   return _fft;
 }
@@ -27,8 +38,9 @@ void fft1(float * input, int inputSize, float *output, FFTManager1 *_fft) {
         return;
     }
 
+
     for (int i = 0; i < inputSize; ++i) {
-        _fft->in[i][0] = input[i];
+        _fft->in[i][0] = input[i] * _fft->multipliers[i];
         _fft->in[i][1] = 0.0;
     }
 
