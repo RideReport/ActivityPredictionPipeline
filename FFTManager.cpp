@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include "FFTManager.h"
 #include <fftw3.h>
-#include <math.h>
 
 
 struct FFTManager {
@@ -36,7 +35,7 @@ void fft(float * input, int inputSize, float *output, FFTManager *_fft) {
     fftw_execute(_fft->p);
 
     // Compute *squared* magnitudes
-    for (int i = 0; i < _fft->N/2; ++i) {
+    for (int i = 1; i <= _fft->N/2; ++i) {
         output[i] = (_fft->out[i][0] * _fft->out[i][0]) + (_fft->out[i][1] * _fft->out[i][1]);
     }
 }
@@ -50,11 +49,11 @@ void deleteFFTManager(FFTManager *_fft) {
 
 float dominantPower(float *output, int inputSize) {
     float max = 0.0;
-    for (int i = 0; i < inputSize/2; ++i) {
+    for (int i = 1; i <= inputSize/2; ++i) {
         if (output[i] > max) {
             max = output[i];
         }
     }
 
-    return sqrt(max);
+    return max;
 }
