@@ -13,6 +13,7 @@ extern "C" {
     typedef struct RandomForestManager RandomForestManager;
     RandomForestManager *createRandomForestManager(int sampleSize, const char* pathToModelFile);
     void deleteRandomForestManager(RandomForestManager *r);
+	float dominantPower(RandomForestManager *randomForestManager, float * input, int inputSize, int managerType);
     void prepFeatureVector(RandomForestManager *randomForestManager, float *features, float *magnitudes, float *speedVector, int speedVectorCount);
     int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector, float *speedVector, int speedVectorCount);
     void randomForestClassificationConfidences(RandomForestManager *randomForestManager, float *magnitudeVector, float *speedVector, int speedVectorCount, float *confidences, int classCount);

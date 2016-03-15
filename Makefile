@@ -10,13 +10,13 @@ BOOST_LIB = /usr/lib/x86_86-linux-gnu
 CC = g++
 CFLAGS = -g -std=c++11
 
-COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -I/usr/local/include -fPIC -o $@ -c $<
+COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/Frameworks/Python.framework/Headers -fPIC -o $@ -c $<
  
 # compile mesh classes
 TARGET = rr_mode_classification
  
 $(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo
-	g++ -shared -Wl,--export-dynamic $^ -L$(BOOST_LIB) -L/usr/local/lib -L/usr/lib/python$(PYTHON_VERSION)/config -lboost_python -lpython$(PYTHON_VERSION) -lopencv_core -lopencv_ml -lfftw3 -lm -o $(TARGET).so
+	$(CC) -shared -Wl, -L/usr/local/lib -L/usr/local/Frameworks/Python.framework/Versions/$(PYTHON_VERSION)/lib -lboost_python -lpython$(PYTHON_VERSION) -lopencv_core -lopencv_ml -lfftw3 -lm -o $(TARGET).so $^ 
 	
 $(TARGET).o: $(TARGET).cpp
 	$(COMPILE)

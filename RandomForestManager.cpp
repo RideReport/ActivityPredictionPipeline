@@ -8,10 +8,10 @@
 
 #include "RandomForestManager.h"
 #include "FFTManager.h"
+#include "FFTManager1.h"
 #include<stdio.h>
-#include <opencv2/opencv.hpp>
-#include <opencv2/core.hpp>
-#include <opencv2/ml.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/ml/ml.hpp>
 
 using namespace cv;
 
@@ -23,7 +23,8 @@ double kurtosis(cv::Mat mat);
 
 struct RandomForestManager {
     int sampleSize;
-    FFTManager *fftManager;
+    FFTManager1 *fftManager1;
+	FFTManager *fftManager;
     cv::Ptr<cv::ml::RTrees> model;
 };
 
@@ -33,6 +34,7 @@ RandomForestManager *createRandomForestManager(int sampleSize, const char* pathT
     
     RandomForestManager *r = new RandomForestManager;
     r->sampleSize = sampleSize;
+    r->fftManager1 = createFFTManager1(sampleSize);
     r->fftManager = createFFTManager(sampleSize);
     r->model = cv::ml::RTrees::load<cv::ml::RTrees>(pathToModelFile);
 
@@ -42,6 +44,7 @@ RandomForestManager *createRandomForestManager(int sampleSize, const char* pathT
 void deleteRandomForestManager(RandomForestManager *r)
 {
     deleteFFTManager(r->fftManager);
+    deleteFFTManager1(r->fftManager1);
     delete(r->model);
     free(r);
 }
@@ -68,6 +71,18 @@ void prepFeatureVector(RandomForestManager *randomForestManager, float* features
     features[5] = (float)kurtosis(mags);
     features[6] = maxPower;
     features[7] = (float)meanSpeed.val[0];
+}
+
+float dominantPower(RandomForestManager *randomForestManager, float * magnitudeVector, int inputSize, int managerType);
+{
+	float *fft1Output = new float[randomForestManager->sampleSize];
+	if managerType == 1 {
+		fft1(magnitudeVector, inputSize, fftOutput, randomForestManager->fftManager1);
+	    return dominantPower1(fftOutput, inputSize);
+	} else {
+		fft(magnitudeVector, inputSize, fftOutput, randomForestManager->fftManager);
+	    return dominantPower(fftOutput, inputSize);		
+	}
 }
 
 int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector, float *speedVector, int speedVectorCount)
