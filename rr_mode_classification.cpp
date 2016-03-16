@@ -38,26 +38,15 @@ public:
     ~RandomForest() {
         deleteRandomForestManager(_manager);
     }
-    int classify(list& norms, list& speeds) {
-        _checkNorms(norms);
 
-        auto normsVec = vectorFromList<float>(norms);
-        auto speedsVec = vectorFromList<float>(speeds);
-
-        return randomForesetClassifyMagnitudeVector(_manager,
-            normsVec.data(),
-            speedsVec.data(), speedsVec.size());
-    }
-
-    list predict_proba(list& norms, list& speeds) {
+    list predict_proba(list& norms) {
         const int N_CLASSES = 4;
         _checkNorms(norms);
 
         auto normsVec = vectorFromList<float>(norms);
-        auto speedsVec = vectorFromList<float>(speeds);
 
         auto confidences = vector<float>(N_CLASSES);
-        randomForestClassificationConfidences( _manager, normsVec.data(), speedsVec.data(), speedsVec.size(), confidences.data(), N_CLASSES);
+        randomForestClassificationConfidences( _manager, normsVec.data(), confidences.data(), N_CLASSES);
 
         list ret;
         for (float value : confidences) {
@@ -66,15 +55,14 @@ public:
         return ret;
     }
 
-    list prepareFeatures(list& norms, list& speeds) {
+    list prepareFeatures(list& norms) {
         _checkNorms(norms);
 
         auto normsVec = vectorFromList<float>(norms);
-        auto speedsVec = vectorFromList<float>(speeds);
 
         auto featuresVec = vector<float>(RANDOM_FOREST_VECTOR_SIZE, 0.0);
 
-        prepFeatureVector(_manager, featuresVec.data(), normsVec.data(), speedsVec.data(), speedsVec.size());
+        prepFeatureVector(_manager, featuresVec.data(), normsVec.data());
 
         list ret;
         for (float value : featuresVec) {
@@ -118,7 +106,6 @@ protected:
 BOOST_PYTHON_MODULE(rr_mode_classification)
 {
     class_<RandomForest>("RandomForest", init<int, std::string>())
-        .def("classify", &RandomForest::classify)
         .def("prepareFeatures", &RandomForest::prepareFeatures)
         .def("predict_proba", &RandomForest::predict_proba)
         .def("classLabels", &RandomForest::classLabels)
