@@ -71,6 +71,10 @@ public:
         return ret;
     }
 
+    int getFeatureCount() {
+        return RANDOM_FOREST_VECTOR_SIZE;
+    }
+
     float dominantPowerFFT(list& samples, int fftType = 1) {
         auto samplesVec = vectorFromList<float>(samples);
 
@@ -110,6 +114,7 @@ BOOST_PYTHON_MODULE(rr_mode_classification)
         .def("predict_proba", &RandomForest::predict_proba)
         .def("classLabels", &RandomForest::classLabels)
         .def("dominantPowerFFT", &RandomForest::dominantPowerFFT)
+        .add_property("feature_count", &RandomForest::getFeatureCount)
     ;
 }
 
