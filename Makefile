@@ -25,11 +25,11 @@ COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/
 TARGET = rr_mode_classification
  
 ifeq ($(SNAME), Linux)
-$(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager1.oo
+$(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager_fftw.oo
 	$(CC) $^ -shared $(LFLAGS) -o $(TARGET).so
 endif
 ifeq ($(SNAME), Darwin)
-$(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo fftmanager1.oo
+$(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo fftmanager_fftw.oo
 	$(CC) $^ -shared $(LFLAGS) -o $(TARGET).so
 endif
 	
@@ -42,7 +42,7 @@ randomforestmanager.oo: RandomForestManager.cpp
 fftmanager.oo: FFTManager.cpp
 	$(COMPILE)
 
-fftmanager1.oo: FFTManager1.cpp
+fftmanager_fftw.oo: FFTManager_fftw.cpp
 	$(COMPILE)
 
 .PHONY: clean install

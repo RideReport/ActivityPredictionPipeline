@@ -1,10 +1,10 @@
 #include <stdlib.h>
-#include "FFTManager1.h"
+#include "FFTManager_fftw.h"
 #include <fftw3.h>
 #include <math.h>
 
 
-struct FFTManager1 {
+struct FFTManager {
     unsigned int N;
     fftw_complex *in;
     fftw_complex *out;
@@ -13,14 +13,13 @@ struct FFTManager1 {
 };
 
 void setupHammingWindow(float *values, int N) {
-    // See https://en.wikipedia.org/wiki/Hann_function
     for (int i = 0; i < N; ++i) {
         values[i] = 0.54 - 0.46 * cos(2*M_PI*i/(N-1));
     }
 }
 
-FFTManager1* createFFTManager1(int sampleSize) {
-  FFTManager1* _fft = (struct FFTManager1*) malloc(sizeof(struct FFTManager1));
+FFTManager* createFFTManager(int sampleSize) {
+  FFTManager* _fft = (struct FFTManager*) malloc(sizeof(struct FFTManager));
   _fft->N = sampleSize;
   _fft->in = fftw_alloc_complex(sampleSize);
   _fft->out = fftw_alloc_complex(sampleSize);
@@ -32,7 +31,7 @@ FFTManager1* createFFTManager1(int sampleSize) {
   return _fft;
 }
 
-void fft1(float * input, int inputSize, float *output, FFTManager1 *_fft) {
+void fft(FFTManager *_fft, float * input, int inputSize, float *output) {
     if (inputSize != _fft->N) {
         // throw?
         return;
@@ -52,14 +51,14 @@ void fft1(float * input, int inputSize, float *output, FFTManager1 *_fft) {
     }
 }
 
-void deleteFFTManager1(FFTManager1 *_fft) {
+void deleteFFTManager(FFTManager *_fft) {
     fftw_destroy_plan(_fft->p);
     fftw_free(_fft->in);
     fftw_free(_fft->out);
     free(_fft);
 }
 
-float dominantPower1(float *output, int inputSize) {
+float dominantPower(float *output, int inputSize) {
     float max = 0.0;
     for (int i = 1; i <= inputSize/2; ++i) {
         if (output[i] > max) {
