@@ -33,10 +33,10 @@ $(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo fftmanager_fftw.o
 	$(CC) $^ -shared $(LFLAGS) -o $(TARGET).so
 endif
 	
-$(TARGET).o: $(TARGET).cpp
+rr_mode_classification.o: rr_mode_classification.cpp RandomForestManager.h
 	$(COMPILE)
 
-randomforestmanager.oo: RandomForestManager.cpp
+randomforestmanager.oo: RandomForestManager.cpp RandomForestManager.h FFTManager.h
 	$(COMPILE)
 
 fftmanager.oo: FFTManager.cpp
