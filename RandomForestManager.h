@@ -12,7 +12,7 @@
 extern "C" {
 #endif
     typedef struct RandomForestManager RandomForestManager;
-    RandomForestManager *createRandomForestManager(int sampleSize, const char* pathToModelFile);
+    RandomForestManager *createRandomForestManager(int sampleSize, int samplingRateHz, const char* pathToModelFile);
     void deleteRandomForestManager(RandomForestManager *r);
     float dominantPowerOfFFT(RandomForestManager *randomForestManager, float * input, int inputSize, int managerType);
     void prepFeatureVector(RandomForestManager *randomForestManager, float *features, float *magnitudes);

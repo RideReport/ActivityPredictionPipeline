@@ -15,6 +15,7 @@
 #include<stdio.h>
 #include <opencv2/core/core.hpp>
 #include <opencv2/ml/ml.hpp>
+#include <vector>
 
 #ifdef __APPLE__
 #define FFT_TYPE_NUMBER 0
@@ -23,6 +24,7 @@
 #endif
 
 using namespace cv;
+using namespace std;
 
 // Private Functions
 float max(cv::Mat mat);
@@ -32,12 +34,16 @@ double kurtosis(cv::Mat mat);
 
 struct RandomForestManager {
     int sampleSize;
+    int samplingRateHz;
+    int fftIndex_above8hz;
+    int fftIndex_below2_5hz;
+
     FFTManager *fftManager;
 
     cv::Ptr<cv::ml::RTrees> model;
 };
 
-RandomForestManager *createRandomForestManager(int sampleSize, const char* pathToModelFile)
+RandomForestManager *createRandomForestManager(int sampleSize, int samplingRateHz, const char* pathToModelFile)
 {
     assert(fmod(log2(sampleSize), 1.0) == 0.0); // sampleSize must be a power of 2
 
@@ -46,6 +52,10 @@ RandomForestManager *createRandomForestManager(int sampleSize, const char* pathT
     r->fftManager = createFFTManager(sampleSize);
 
     r->model = cv::ml::RTrees::load<cv::ml::RTrees>(pathToModelFile);
+
+    float sampleSpacing = 1. / (float) samplingRateHz;
+    r->fftIndex_above8hz = ceilf(sampleSpacing * sampleSize * 8);
+    r->fftIndex_below2_5hz = floorf(sampleSpacing * sampleSize * 2.5);
 
     return r;
 }
@@ -64,12 +74,12 @@ void deleteRandomForestManager(RandomForestManager *r)
  * We assume unit steps on the X-axis. Multiply the return value by a scaling
  * factor to convert to real-world measurements.
  */
-float trapezoidArea(float *y, int length)
+float trapezoidArea(vector<float>::iterator start, vector<float>::iterator end)
 {
     float area = 0.0;
-    if (length >= 1) {
-        for (int i = 1; i < length; ++i) {
-            area += y[i] - y[i-1] / 2.;
+    if (start != end) {
+        for (auto it = start + 1; it != end; it++) {
+            area += (*it + *(it - 1)) / 2.;
         }
     }
     return area;
@@ -86,12 +96,14 @@ void prepFeatureVector(RandomForestManager *randomForestManager, float* features
     fft(randomForestManager->fftManager, magnitudeVector, randomForestManager->sampleSize, fftOutput);
     float maxPower = dominantPower(fftOutput, randomForestManager->sampleSize);
 
-    float *spectrum = fftOutput + 1; // skip DC (zero frequency) component
-    int spectrumLength = randomForestManager->sampleSize / 2;
-    float fftIntegral = trapezoidArea(spectrum, spectrumLength);
-    // These numbers are hard-coded for a 64-element input array
-    float fftIntegralAbove8hz = trapezoidArea(spectrum + 26, spectrumLength - 26);
-    float fftIntegralBelow2_5hz = trapezoidArea(spectrum, 8);
+    int spectrumLength = randomForestManager->sampleSize / 2; // exclude nyquist frequency
+    vector<float> spectrum (fftOutput, fftOutput + spectrumLength);
+    float fftIntegral = trapezoidArea(spectrum.begin() + 1, spectrum.end()); // exclude DC / 0Hz power
+
+    float fftIntegralAbove8hz = trapezoidArea(spectrum.begin() + randomForestManager->fftIndex_above8hz, spectrum.end());
+    float fftIntegralBelow2_5hz = trapezoidArea(
+        spectrum.begin() + 1, // exclude DC
+        spectrum.begin() + randomForestManager->fftIndex_below2_5hz + 1); // include 2.5Hz component
 
     features[0] = max(mags);
     features[1] = (float)meanMag.val[0];
