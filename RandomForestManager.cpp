@@ -114,7 +114,7 @@ void prepFeatureVector(RandomForestManager *randomForestManager, float* features
     features[6] = maxPower;
     features[7] = fftIntegral;
     features[8] = fftIntegralAbove8hz;
-    features[8] = fftIntegralBelow2_5hz;
+    features[9] = fftIntegralBelow2_5hz;
 }
 
 int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float *magnitudeVector)
