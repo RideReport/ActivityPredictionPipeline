@@ -48,7 +48,7 @@ fftmanager_fftw.oo: FFTManager_fftw.cpp
 .PHONY: clean install
 
 clean:
-	rm *.oo *.o *.so
+	rm -f *.oo *.o *.so 
 
 install:
 	cp rr_mode_classification.so ../
