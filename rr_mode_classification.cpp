@@ -5,6 +5,7 @@
 #include <boost/python.hpp>
 #include <boost/python/stl_iterator.hpp>
 #include "RandomForestManager.h"
+#include "FFTManager.h"
 using namespace boost::python;
 using namespace std;
 
@@ -16,6 +17,16 @@ vector<T> vectorFromList(list& l) {
 }
 
 // TODO: try vector_indexing_suite
+
+class FFT {
+public:
+	void autocorrelationFFT(list& input, list& output) {
+        auto inputVec = vectorFromList<float>(input);
+        auto outputVec = vectorFromList<float>(output);
+
+        autocorrelation(inputVec.data(), len(input), outputVec.data());
+	}
+};
 
 class RandomForest {
 public:
@@ -39,14 +50,16 @@ public:
         deleteRandomForestManager(_manager);
     }
 
-    list predict_proba(list& norms) {
+    list predict_proba(list& norms, list& norms2) {
         const int N_CLASSES = 4;
         _checkNorms(norms);
+        _checkNorms(norms2);
 
         auto normsVec = vectorFromList<float>(norms);
+        auto normsVec2 = vectorFromList<float>(norms);
 
         auto confidences = vector<float>(N_CLASSES);
-        randomForestClassificationConfidences( _manager, normsVec.data(), confidences.data(), N_CLASSES);
+        randomForestClassificationConfidences( _manager, normsVec.data(), normsVec2.data(), confidences.data(), N_CLASSES);
 
         list ret;
         for (float value : confidences) {
@@ -55,14 +68,16 @@ public:
         return ret;
     }
 
-    list prepareFeatures(list& norms) {
+    list prepareFeatures(list& norms, list& norms2) {
         _checkNorms(norms);
+        _checkNorms(norms2);
 
         auto normsVec = vectorFromList<float>(norms);
+        auto normsVec2 = vectorFromList<float>(norms2);
 
         auto featuresVec = vector<float>(RANDOM_FOREST_VECTOR_SIZE, 0.0);
 
-        prepFeatureVector(_manager, featuresVec.data(), normsVec.data());
+        prepFeatureVector(_manager, featuresVec.data(), normsVec.data(), normsVec2.data());
 
         list ret;
         for (float value : featuresVec) {
@@ -108,5 +123,8 @@ BOOST_PYTHON_MODULE(rr_mode_classification)
         .def("getFeatureCount", &RandomForest::getFeatureCount)
         .add_property("feature_count", &RandomForest::getFeatureCount)
     ;
+	class_<FFT>("FFT")
+     .def("autocorrelationFFT", &FFT::autocorrelationFFT)
+ 	;
 }
 

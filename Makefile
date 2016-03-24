@@ -13,7 +13,7 @@ ifeq ($(SNAME), Linux)
 LFLAGS = $(LFLAGS_COMMON) -Wl,--export-dynamic
 endif
 ifeq ($(SNAME), Darwin)
-LFLAGS = $(LFLAGS_COMMON) -framework Accelerate
+LFLAGS = $(LFLAGS_COMMON) -Wl -framework Accelerate
 endif
 
 CC = g++
