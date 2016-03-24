@@ -18,16 +18,6 @@ vector<T> vectorFromList(list& l) {
 
 // TODO: try vector_indexing_suite
 
-class FFT {
-public:
-	void autocorrelationFFT(list& input, list& output) {
-        auto inputVec = vectorFromList<float>(input);
-        auto outputVec = vectorFromList<float>(output);
-
-        autocorrelation(inputVec.data(), len(input), outputVec.data());
-	}
-};
-
 class RandomForest {
 public:
     RandomForest(int sampleSize, std::string pathToModelFile) {
@@ -123,8 +113,5 @@ BOOST_PYTHON_MODULE(rr_mode_classification)
         .def("getFeatureCount", &RandomForest::getFeatureCount)
         .add_property("feature_count", &RandomForest::getFeatureCount)
     ;
-	class_<FFT>("FFT")
-     .def("autocorrelationFFT", &FFT::autocorrelationFFT)
- 	;
 }
 
