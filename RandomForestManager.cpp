@@ -153,6 +153,9 @@ void prepFeatureVector(RandomForestManager *randomForestManager, float* features
     features[20] = percentile(gyroscopeVector, randomForestManager->sampleSize, 0.5);
     features[21] = percentile(gyroscopeVector, randomForestManager->sampleSize, 0.75);
     features[22] = percentile(gyroscopeVector, randomForestManager->sampleSize, 0.9);
+
+    delete[] fftOutput;
+    delete[] fftOutput2;
 }
 
 int randomForesetClassifyMagnitudeVector(RandomForestManager *randomForestManager, float* accelerometerVector, float* gyroscopeVector)
