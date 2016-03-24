@@ -76,7 +76,7 @@ public:
         randomForestGetClassLabels(_manager, labelsVec.data(), _n_classes);
         list ret;
         for (float value: labelsVec) {
-            ret.append(value);
+            ret.append((int)value);
         }
         return ret;
     }
