@@ -38,7 +38,7 @@ public:
     }
 
     list predict_proba(list& norms, list& norms2) {
-        const int N_CLASSES = 4;
+        _checkClassCount();
         _checkNorms(norms);
         _checkNorms(norms2);
 
@@ -78,9 +78,7 @@ public:
     }
 
     list classLabels() {
-        if (_n_classes == -1) {
-            _n_classes = randomForestGetClassCount(_manager);
-        }
+        _checkClassCount();
         auto labelsVec = vector<int>(_n_classes, 0);
         randomForestGetClassLabels(_manager, labelsVec.data(), _n_classes);
         list ret;
@@ -101,6 +99,13 @@ protected:
             throw std::length_error("Cannot classify vector with length that does not match sample size");
         }
     }
+
+    void _checkClassCount() {
+        if (_n_classes == -1) {
+            _n_classes = randomForestGetClassCount(_manager);
+        }
+    }
+
 };
 
 
