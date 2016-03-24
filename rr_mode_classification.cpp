@@ -20,10 +20,10 @@ vector<T> vectorFromList(list& l) {
 
 class RandomForest {
 public:
-    RandomForest(int sampleSize, std::string pathToModelFile) {
+    RandomForest(int sampleSize, int samplingRateHz, std::string pathToModelFile) {
         _sampleSize = sampleSize;
         try {
-            _manager = createRandomForestManager(sampleSize, pathToModelFile.c_str());
+            _manager = createRandomForestManager(sampleSize, samplingRateHz, pathToModelFile.c_str());
         }
         catch (std::exception& e) {
             PyErr_SetString(PyExc_RuntimeError, e.what());
@@ -31,10 +31,8 @@ public:
         catch (...) {
             PyErr_SetString(PyExc_RuntimeError, "Unknown error");
         }
-        //if (_manager != NULL) {
-        //    cout << "Trying to get class count on manager " << _manager << endl;
-        //    _n_classes = randomForestGetClassCount(_manager);
-        //}
+
+        _n_classes = randomForestGetClassCount(_manager);
     }
     ~RandomForest() {
         deleteRandomForestManager(_manager);
@@ -48,8 +46,8 @@ public:
         auto normsVec = vectorFromList<float>(norms);
         auto normsVec2 = vectorFromList<float>(norms);
 
-        auto confidences = vector<float>(N_CLASSES);
-        randomForestClassificationConfidences( _manager, normsVec.data(), normsVec2.data(), confidences.data(), N_CLASSES);
+        auto confidences = vector<float>(_n_classes);
+        randomForestClassificationConfidences( _manager, normsVec.data(), normsVec2.data(), confidences.data(), _n_classes);
 
         list ret;
         for (float value : confidences) {
@@ -84,7 +82,7 @@ public:
         auto labelsVec = vector<int>(_n_classes, 0);
         randomForestGetClassLabels(_manager, labelsVec.data(), _n_classes);
         list ret;
-        for (float value: labelsVec) {
+        for (int value: labelsVec) {
             ret.append(value);
         }
         return ret;
@@ -106,7 +104,7 @@ protected:
 
 BOOST_PYTHON_MODULE(rr_mode_classification)
 {
-    class_<RandomForest>("RandomForest", init<int, std::string>())
+    class_<RandomForest>("RandomForest", init<int, int, std::string>())
         .def("prepareFeatures", &RandomForest::prepareFeatures)
         .def("predict_proba", &RandomForest::predict_proba)
         .def("classLabels", &RandomForest::classLabels)
