@@ -31,8 +31,6 @@ public:
         catch (...) {
             PyErr_SetString(PyExc_RuntimeError, "Unknown error");
         }
-        cout << _manager << endl;
-
         _n_classes = -1;
     }
     ~RandomForest() {
