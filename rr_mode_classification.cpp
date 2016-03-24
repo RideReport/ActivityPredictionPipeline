@@ -30,19 +30,20 @@ public:
         catch (...) {
             PyErr_SetString(PyExc_RuntimeError, "Unknown error");
         }
+
+        _n_classes = randomForestGetClassCount(_manager);
     }
     ~RandomForest() {
         deleteRandomForestManager(_manager);
     }
 
     list predict_proba(list& norms) {
-        const int N_CLASSES = 4;
         _checkNorms(norms);
 
         auto normsVec = vectorFromList<float>(norms);
 
-        auto confidences = vector<float>(N_CLASSES);
-        randomForestClassificationConfidences( _manager, normsVec.data(), confidences.data(), N_CLASSES);
+        auto confidences = vector<float>(_n_classes);
+        randomForestClassificationConfidences( _manager, normsVec.data(), confidences.data(), _n_classes);
 
         list ret;
         for (float value : confidences) {
@@ -75,8 +76,8 @@ public:
         auto labelsVec = vector<int>(_n_classes, 0);
         randomForestGetClassLabels(_manager, labelsVec.data(), _n_classes);
         list ret;
-        for (float value: labelsVec) {
-            ret.append((int)value);
+        for (int value: labelsVec) {
+            ret.append(value);
         }
         return ret;
     }
