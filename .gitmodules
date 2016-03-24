@@ -1,0 +1,3 @@
+[submodule "ActivityPredictor"]
+	path = ActivityPredictor
+	url = git@github.com:KnockSoftware/ActivityPredictor.git

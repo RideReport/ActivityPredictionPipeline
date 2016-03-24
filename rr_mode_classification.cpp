@@ -4,8 +4,8 @@
 
 #include <boost/python.hpp>
 #include <boost/python/stl_iterator.hpp>
-#include "RandomForestManager.h"
-#include "FFTManager.h"
+#include "ActivityPredictor/RandomForestManager.h"
+
 using namespace boost::python;
 using namespace std;
 

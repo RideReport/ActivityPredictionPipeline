@@ -36,13 +36,13 @@ endif
 rr_mode_classification.o: rr_mode_classification.cpp RandomForestManager.h
 	$(COMPILE)
 
-randomforestmanager.oo: RandomForestManager.cpp RandomForestManager.h FFTManager.h
+randomforestmanager.oo: ActivityPredictor/RandomForestManager.cpp ActivityPredictor/RandomForestManager.h ActivityPredictor/FFTManager.h
 	$(COMPILE)
 
-fftmanager.oo: FFTManager.cpp
+fftmanager.oo: ActivityPredictor/FFTManager.cpp
 	$(COMPILE)
 
-fftmanager_fftw.oo: FFTManager_fftw.cpp
+fftmanager_fftw.oo: ActivityPredictor/FFTManager_fftw.cpp
 	$(COMPILE)
 
 .PHONY: clean install
