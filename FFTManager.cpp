@@ -46,8 +46,8 @@ void fft(FFTManager *manager, float * input, int inputSize, float *output)
     vDSP_fft_zip(manager->fftWeights, &splitComplex, 1, log2f(inputSize), FFT_FORWARD);
     vDSP_zvmags(&splitComplex, 1, output, 1, inputSize);
     
-    free(zeroArray);
-    free(hammingWindow);
+    delete[](zeroArray);
+    delete[](hammingWindow);
 }
 
 void autocorrelation(float *input, int inputSize, float *output)
@@ -67,7 +67,7 @@ void autocorrelation(float *input, int inputSize, float *output)
 //    vDSP_conv(signal, 1, &input[inputSize - 1], -1, result, 1, inputSize, inputSize);
     vDSP_conv(signal, 1, &input[inputSize - 1], -1, output, 1, inputSize, inputSize);
     
-    free(signal);
+    delete[](signal);
 //    free(result);
 
 //    return 0.0;
