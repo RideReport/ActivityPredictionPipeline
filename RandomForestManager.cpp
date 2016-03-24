@@ -125,7 +125,7 @@ void prepFeatureVector(RandomForestManager *randomForestManager, float* features
     float *fftOutput2 = new float[randomForestManager->sampleSize];
     fft(randomForestManager->fftManager, gyroscopeVector, randomForestManager->sampleSize, fftOutput2);
     float maxPower2 = dominantPower(fftOutput2, randomForestManager->sampleSize);
-    vector<float> spectrum2 (fftOutput2, fftOutput + spectrumLength); // skip DC (zero frequency) component
+    vector<float> spectrum2 (fftOutput2, fftOutput2 + spectrumLength); // skip DC (zero frequency) component
     float fftIntegral2 = trapezoidArea(spectrum2.begin() + 1, spectrum2.end());
     float fftIntegralAbove8hz2 = trapezoidArea(spectrum2.begin() + randomForestManager->fftIndex_above8hz, spectrum2.end());
     float fftIntegralBelow2to3_5Hz = trapezoidArea(spectrum2.begin() + randomForestManager->fftIndex_above2hz, spectrum2.begin() + randomForestManager->fftIndex_above3_5hz);

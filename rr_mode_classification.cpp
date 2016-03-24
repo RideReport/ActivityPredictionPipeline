@@ -31,8 +31,9 @@ public:
         catch (...) {
             PyErr_SetString(PyExc_RuntimeError, "Unknown error");
         }
+        cout << _manager << endl;
 
-        _n_classes = randomForestGetClassCount(_manager);
+        _n_classes = -1;
     }
     ~RandomForest() {
         deleteRandomForestManager(_manager);
@@ -44,7 +45,7 @@ public:
         _checkNorms(norms2);
 
         auto normsVec = vectorFromList<float>(norms);
-        auto normsVec2 = vectorFromList<float>(norms);
+        auto normsVec2 = vectorFromList<float>(norms2);
 
         auto confidences = vector<float>(_n_classes);
         randomForestClassificationConfidences( _manager, normsVec.data(), normsVec2.data(), confidences.data(), _n_classes);
@@ -79,6 +80,9 @@ public:
     }
 
     list classLabels() {
+        if (_n_classes == -1) {
+            _n_classes = randomForestGetClassCount(_manager);
+        }
         auto labelsVec = vector<int>(_n_classes, 0);
         randomForestGetClassLabels(_manager, labelsVec.data(), _n_classes);
         list ret;
