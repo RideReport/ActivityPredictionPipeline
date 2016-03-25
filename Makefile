@@ -24,14 +24,32 @@ COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/
 # compile mesh classes
 TARGET = rr_mode_classification
 
+.PHONY: all
+
 ifeq ($(SNAME), Linux)
+
+all: $(TARGET).so fftw_fft.so
+
 $(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager_fftw.oo
 	$(CC) $^ -shared $(LFLAGS) -o $(TARGET).so
+
 endif
+
 ifeq ($(SNAME), Darwin)
+
+all: $(TARGET).so fftw_fft.so apple_fft.so
+
 $(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo
 	$(CC) $^ -shared $(LFLAGS) -o $(TARGET).so
+
+apple_fft.so: apple_fft.oo fftmanager.oo
+	$(CC) $^ -shared $(LFLAGS) -o $@
+
 endif
+
+fftw_fft.so: fftw_fft.oo fftmanager_fftw.oo
+	$(CC) $^ -shared $(LFLAGS) -o $@
+
 
 rr_mode_classification.o: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
 	$(COMPILE)
@@ -43,6 +61,12 @@ fftmanager.oo: ActivityPredictor/FFTManager.cpp
 	$(COMPILE)
 
 fftmanager_fftw.oo: ActivityPredictor/FFTManager_fftw.cpp
+	$(COMPILE)
+
+apple_fft.oo: AppleFFTPythonAdapter.cpp AppleFFTPythonAdapter.hpp util.hpp ActivityPredictor/FFTManager.h
+	$(COMPILE)
+
+fftw_fft.oo: FFTWPythonAdapter.cpp FFTWPythonAdapter.hpp util.hpp ActivityPredictor/FFTManager_fftw.h
 	$(COMPILE)
 
 .PHONY: clean install

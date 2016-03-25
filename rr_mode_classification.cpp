@@ -5,16 +5,16 @@
 #include <boost/python.hpp>
 #include <boost/python/stl_iterator.hpp>
 #include "ActivityPredictor/RandomForestManager.h"
+#include "util.hpp"
+
+#ifdef __APPLE__
+#include "AppleFFTPythonAdapter.hpp"
+#endif
+#include "FFTWPythonAdapter.hpp"
 
 using namespace boost::python;
 using namespace std;
 
-template<typename T>
-vector<T> vectorFromList(list& l) {
-    stl_input_iterator<T> begin(l), end;
-    auto vec = vector<T>(begin, end);
-    return vec;
-}
 
 // TODO: try vector_indexing_suite
 
@@ -119,4 +119,3 @@ BOOST_PYTHON_MODULE(rr_mode_classification)
         .add_property("feature_count", &RandomForest::getFeatureCount)
     ;
 }
-
