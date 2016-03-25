@@ -16,9 +16,9 @@ AppleFFTPythonAdapter::~AppleFFTPythonAdapter() {
 py::list AppleFFTPythonAdapter::fft(py::list input) {
     auto inputVec = vectorFromList<float>(input); 
     auto outputVec = vector<float>(_sampleSize);
-    ::fft((FFTManager*)_fft, inputVec.data(), inputVec.size(), outputVec.data()) 
+    ::fft((FFTManager*)_fft, inputVec.data(), inputVec.size(), outputVec.data());
 
-    list ret;
+    py::list ret;
     for (float value : outputVec) {
         ret.append(value);
     }

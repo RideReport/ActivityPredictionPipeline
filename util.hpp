@@ -3,6 +3,7 @@
 
 #include <boost/python.hpp>
 #include <boost/python/stl_iterator.hpp>
+#include <vector>
 
 template<typename T>
 std::vector<T> vectorFromList(boost::python::list& l) {
