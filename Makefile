@@ -29,7 +29,7 @@ $(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager_fftw.oo
 	$(CC) $^ -shared $(LFLAGS) -o $(TARGET).so
 endif
 ifeq ($(SNAME), Darwin)
-$(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo fftmanager_fftw.oo
+$(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo
 	$(CC) $^ -shared $(LFLAGS) -o $(TARGET).so
 endif
 
