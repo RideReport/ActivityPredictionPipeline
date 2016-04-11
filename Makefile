@@ -28,7 +28,7 @@ TARGET = rr_mode_classification
 
 ifeq ($(SNAME), Linux)
 
-all: $(TARGET).so fftw_fft.so
+all: $(TARGET).so fftw_fft.so opencv_fft.so
 
 $(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager_fftw.oo
 	$(CC) $^ -shared $(LFLAGS) -o $(TARGET).so
@@ -37,7 +37,7 @@ endif
 
 ifeq ($(SNAME), Darwin)
 
-all: $(TARGET).so fftw_fft.so apple_fft.so
+all: $(TARGET).so fftw_fft.so apple_fft.so opencv_fft.so
 
 $(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager.oo
 	$(CC) $^ -shared $(LFLAGS) -o $(TARGET).so
@@ -50,6 +50,8 @@ endif
 fftw_fft.so: fftw_fft.oo fftmanager_fftw.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
+opencv_fft.so: opencv_fft.oo fftmanager_opencv.oo
+	$(CC) $^ -shared $(LFLAGS) -o $@
 
 rr_mode_classification.o: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
 	$(COMPILE)
@@ -63,10 +65,16 @@ fftmanager.oo: ActivityPredictor/FFTManager.cpp
 fftmanager_fftw.oo: ActivityPredictor/FFTManager_fftw.cpp
 	$(COMPILE)
 
+fftmanager_opencv.oo: ActivityPredictor/FFTManager_opencv.cpp
+	$(COMPILE)
+
 apple_fft.oo: AppleFFTPythonAdapter.cpp AppleFFTPythonAdapter.hpp util.hpp ActivityPredictor/FFTManager.h
 	$(COMPILE)
 
 fftw_fft.oo: FFTWPythonAdapter.cpp FFTWPythonAdapter.hpp util.hpp ActivityPredictor/FFTManager_fftw.h
+	$(COMPILE)
+
+opencv_fft.oo: OpenCVFFTPythonAdapter.cpp OpenCVFFTPythonAdapter.hpp util.hpp ActivityPredictor/FFTManager_opencv.h
 	$(COMPILE)
 
 .PHONY: clean install
