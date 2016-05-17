@@ -7,7 +7,7 @@ PYTHON_INCLUDE = /usr/include/python$(PYTHON_VERSION)
 
 # location of the Boost Python include files and library
 
-LFLAGS_COMMON = -L/usr/local/lib -L/usr/local/Frameworks/Python.framework/Versions/$(PYTHON_VERSION)/lib -lboost_python -lpython$(PYTHON_VERSION) -lopencv_core -lopencv_ml -lfftw3 -lm
+LFLAGS_COMMON = -L/usr/local/lib -L/usr/local/Frameworks/Python.framework/Versions/$(PYTHON_VERSION)/lib -lboost_python -lpython$(PYTHON_VERSION) -lopencv_core -lopencv_ml -lm
 
 ifeq ($(SNAME), Linux)
 LFLAGS = $(LFLAGS_COMMON) -Wl,--export-dynamic
@@ -48,7 +48,7 @@ apple_fft.so: apple_fft.oo fftmanager.oo
 endif
 
 fftw_fft.so: fftw_fft.oo fftmanager_fftw.oo
-	$(CC) $^ -shared $(LFLAGS) -o $@
+	$(CC) $^ -shared $(LFLAGS) -lfftw3 -o $@
 
 opencv_fft.so: opencv_fft.oo fftmanager_opencv.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
