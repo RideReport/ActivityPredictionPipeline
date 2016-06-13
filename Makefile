@@ -30,7 +30,7 @@ ifeq ($(SNAME), Linux)
 
 all: $(TARGET).so fftw_fft.so opencv_fft.so
 
-$(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager_fftw.oo
+$(TARGET).so: $(TARGET).o randomforestmanager.oo fftmanager_opencv.oo
 	$(CC) $^ -shared $(LFLAGS) -o $(TARGET).so
 
 endif

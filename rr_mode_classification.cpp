@@ -10,7 +10,7 @@
 #ifdef __APPLE__
 #include "AppleFFTPythonAdapter.hpp"
 #endif
-#include "FFTWPythonAdapter.hpp"
+#include "OpenCVFFTPythonAdapter.hpp"
 
 using namespace boost::python;
 using namespace std;
