@@ -21,42 +21,19 @@ CFLAGS = -g -std=c++11
 
 COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/Frameworks/Python.framework/Headers -fPIC -o $@ -c $<
 
-# Choose an fft manager; specify FFTMANAGER=opencv or FFTMANAGER=apple in ENV to override.
-
-ifeq ($(SNAME), Linux)
-	FFTMANAGER?=opencv
-endif
-ifeq ($(SNAME), Darwin)
-	FFTMANAGER?=apple
-endif
-
-ifeq ($(FFTMANAGER), opencv)
-	FFTMANAGER_O=fftmanager_opencv.oo
-endif
-ifeq ($(FFTMANAGER), apple)
-	FFTMANAGER_O=fftmanager.oo
-endif
-ifeq ($(FFTMANAGER), fftw)
-	FFTMANAGER_O=fftmanager_fftw.oo
-endif
-
-
 .PHONY: all
 
 ifeq ($(SNAME), Linux)
 
-all: rr_mode_classification.so fftw_fft.so opencv_fft.so
-
-rr_mode_classification.so: rr_mode_classification.o randomforestmanager.oo $(FFTMANAGER_O)
-	$(CC) $^ -shared $(LFLAGS) -o $@
+all: rr_mode_classification_opencv.so fftw_fft.so opencv_fft.so
 
 endif
 
 ifeq ($(SNAME), Darwin)
 
-all: rr_mode_classification.so fftw_fft.so apple_fft.so opencv_fft.so
+all: rr_mode_classification_opencv.so rr_mode_classification_apple.so fftw_fft.so apple_fft.so opencv_fft.so
 
-rr_mode_classification.so: rr_mode_classification.o randomforestmanager.oo $(FFTMANAGER_O)
+rr_mode_classification_apple.so: rr_mode_classification_apple.oo randomforestmanager.oo fftmanager.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
 apple_fft.so: apple_fft.oo fftmanager.oo
@@ -64,14 +41,20 @@ apple_fft.so: apple_fft.oo fftmanager.oo
 
 endif
 
+rr_mode_classification_opencv.so: rr_mode_classification_opencv.oo randomforestmanager.oo fftmanager_opencv.oo
+	$(CC) $^ -shared $(LFLAGS) -o $@
+
 fftw_fft.so: fftw_fft.oo fftmanager_fftw.oo
 	$(CC) $^ -shared $(LFLAGS) -lfftw3 -o $@
 
 opencv_fft.so: opencv_fft.oo fftmanager_opencv.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
-rr_mode_classification.o: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
-	$(COMPILE)
+rr_mode_classification_apple.oo: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
+	$(COMPILE) -DPYTHON_MODULE_NAME=rr_mode_classification_apple
+
+rr_mode_classification_opencv.oo: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
+	$(COMPILE) -DPYTHON_MODULE_NAME=rr_mode_classification_opencv
 
 randomforestmanager.oo: ActivityPredictor/RandomForestManager.cpp ActivityPredictor/RandomForestManager.h ActivityPredictor/FFTManager.h
 	$(COMPILE)
@@ -100,4 +83,4 @@ clean:
 	rm -f *.oo *.o *.so
 
 install:
-	cp rr_mode_classification.so ../
+	cp -v rr_mode_classification*.so ../

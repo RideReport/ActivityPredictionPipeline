@@ -15,6 +15,9 @@
 using namespace boost::python;
 using namespace std;
 
+#ifndef PYTHON_MODULE_NAME
+#define PYTHON_MODULE_NAME rr_mode_classification
+#endif
 
 // TODO: try vector_indexing_suite
 
@@ -124,7 +127,7 @@ protected:
 };
 
 
-BOOST_PYTHON_MODULE(rr_mode_classification)
+BOOST_PYTHON_MODULE(PYTHON_MODULE_NAME)
 {
     class_<RandomForest>("RandomForest", init<int, int, std::string, bool>())
         .def("prepareFeatures", &RandomForest::prepareFeatures)
