@@ -20,10 +20,10 @@ using namespace std;
 
 class RandomForest {
 public:
-    RandomForest(int sampleSize, int samplingRateHz, std::string pathToModelFile) {
+    RandomForest(int sampleSize, int samplingRateHz, std::string pathToModelFile, bool accelOnly) {
         _sampleSize = sampleSize;
         try {
-            _manager = createRandomForestManager(sampleSize, samplingRateHz, pathToModelFile.c_str());
+            _manager = createRandomForestManager(sampleSize, samplingRateHz, pathToModelFile.c_str(), accelOnly);
         }
         catch (std::exception& e) {
             PyErr_SetString(PyExc_RuntimeError, e.what());
@@ -111,7 +111,7 @@ protected:
 
 BOOST_PYTHON_MODULE(rr_mode_classification)
 {
-    class_<RandomForest>("RandomForest", init<int, int, std::string>())
+    class_<RandomForest>("RandomForest", init<int, int, std::string, bool>())
         .def("prepareFeatures", &RandomForest::prepareFeatures)
         .def("predict_proba", &RandomForest::predict_proba)
         .def("classLabels", &RandomForest::classLabels)
