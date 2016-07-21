@@ -1,6 +1,6 @@
 #include "OpenCVFFTPythonAdapter.hpp"
 #include "util.hpp"
-#include "ActivityPredictor/FFTManager_opencv.h"
+#include "ActivityPredictor/FFTManager.h"
 #include <vector>
 using namespace std;
 

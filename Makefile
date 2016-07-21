@@ -25,13 +25,13 @@ COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/
 
 ifeq ($(SNAME), Linux)
 
-all: rr_mode_classification_opencv.so fftw_fft.so opencv_fft.so
+all: rr_mode_classification_opencv.so opencv_fft.so
 
 endif
 
 ifeq ($(SNAME), Darwin)
 
-all: rr_mode_classification_opencv.so rr_mode_classification_apple.so fftw_fft.so apple_fft.so opencv_fft.so
+all: rr_mode_classification_opencv.so rr_mode_classification_apple.so apple_fft.so opencv_fft.so
 
 rr_mode_classification_apple.so: rr_mode_classification_apple.oo randomforestmanager.oo fftmanager.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
