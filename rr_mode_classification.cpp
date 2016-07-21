@@ -32,6 +32,7 @@ public:
             PyErr_SetString(PyExc_RuntimeError, "Unknown error");
         }
         _n_classes = -1;
+        _accelOnly = accelOnly;
     }
     ~RandomForest() {
         deleteRandomForestManager(_manager);
@@ -40,13 +41,18 @@ public:
     list predict_proba(list& norms, list& norms2) {
         _checkClassCount();
         _checkNorms(norms);
-        _checkNorms(norms2);
-
         auto normsVec = vectorFromList<float>(norms);
-        auto normsVec2 = vectorFromList<float>(norms2);
 
         auto confidences = vector<float>(_n_classes);
-        randomForestClassificationConfidences( _manager, normsVec.data(), normsVec2.data(), confidences.data(), _n_classes);
+
+        if (_accelOnly) {
+            randomForestClassificationConfidencesAccelerometerOnly(_manager, normsVec.data(), confidences.data(), _n_classes);
+        }
+        else {
+            _checkNorms(norms2);
+            auto normsVec2 = vectorFromList<float>(norms2);
+            randomForestClassificationConfidences( _manager, normsVec.data(), normsVec2.data(), confidences.data(), _n_classes);
+        }
 
         list ret;
         for (float value : confidences) {
@@ -57,14 +63,17 @@ public:
 
     list prepareFeatures(list& norms, list& norms2) {
         _checkNorms(norms);
-        _checkNorms(norms2);
-
         auto normsVec = vectorFromList<float>(norms);
-        auto normsVec2 = vectorFromList<float>(norms2);
+        auto featuresVec = vector<float>(getFeatureCount(), 0.0);
 
-        auto featuresVec = vector<float>(RANDOM_FOREST_VECTOR_SIZE, 0.0);
-
-        prepFeatureVector(_manager, featuresVec.data(), normsVec.data(), normsVec2.data());
+        if (_accelOnly) {
+            prepFeatureVectorAccelerometerOnly(_manager, featuresVec.data(), normsVec.data());
+        }
+        else {
+            _checkNorms(norms2);
+            auto normsVec2 = vectorFromList<float>(norms2);
+            prepFeatureVector(_manager, featuresVec.data(), normsVec.data(), normsVec2.data());
+        }
 
         list ret;
         for (float value : featuresVec) {
@@ -74,7 +83,12 @@ public:
     }
 
     int getFeatureCount() {
-        return RANDOM_FOREST_VECTOR_SIZE;
+        if (_accelOnly) {
+            return RANDOM_FOREST_VECTOR_SIZE_ACCELEROMETER_ONLY;
+        }
+        else {
+            return RANDOM_FOREST_VECTOR_SIZE;
+        }
     }
 
     list classLabels() {
@@ -93,6 +107,7 @@ protected:
     RandomForestManager* _manager;
     int _sampleSize;
     int _n_classes;
+    bool _accelOnly;
 
     void _checkNorms(list& norms) {
         if (len(norms) != _sampleSize) {
