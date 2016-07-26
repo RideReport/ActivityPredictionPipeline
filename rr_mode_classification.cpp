@@ -7,11 +7,6 @@
 #include "ActivityPredictor/RandomForestManager.h"
 #include "util.hpp"
 
-#ifdef __APPLE__
-#include "AppleFFTPythonAdapter.hpp"
-#endif
-#include "OpenCVFFTPythonAdapter.hpp"
-
 using namespace boost::python;
 using namespace std;
 
