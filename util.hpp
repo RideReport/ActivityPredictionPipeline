@@ -12,4 +12,13 @@ std::vector<T> vectorFromList(boost::python::list& l) {
     return vec;
 }
 
+template<typename T>
+boost::python::list listFromVector(std::vector<T> vec) {
+    boost::python::list ret;
+    for (T value : vec) {
+        ret.append(value);
+    }
+    return ret;
+}
+
 #endif

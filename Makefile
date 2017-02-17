@@ -25,7 +25,7 @@ COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/
 
 ifeq ($(SNAME), Linux)
 
-all: rr_mode_classification_opencv.so opencv_fft.so
+all: rr_mode_classification_opencv.so opencv_fft.so utilityadapter.so
 
 endif
 
@@ -48,6 +48,9 @@ fftw_fft.so: fftw_fft.oo fftmanager_fftw.oo
 	$(CC) $^ -shared $(LFLAGS) -lfftw3 -o $@
 
 opencv_fft.so: opencv_fft.oo fftmanager_opencv.oo
+	$(CC) $^ -shared $(LFLAGS) -o $@
+
+utilityadapter.so: utilityadapter.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
 rr_mode_classification_apple.oo: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
@@ -77,10 +80,13 @@ fftw_fft.oo: FFTWPythonAdapter.cpp FFTWPythonAdapter.hpp util.hpp ActivityPredic
 opencv_fft.oo: OpenCVFFTPythonAdapter.cpp OpenCVFFTPythonAdapter.hpp util.hpp ActivityPredictor/FFTManager.h
 	$(COMPILE)
 
+utilityadapter.oo: UtilityAdapter.cpp UtilityAdapter.hpp util.hpp ActivityPredictor/Utility.c
+	$(COMPILE)
+
 .PHONY: clean install
 
 clean:
 	rm -f *.oo *.o *.so
 
 install:
-	cp -v rr_mode_classification*.so ../
+	cp -v *.so ../
