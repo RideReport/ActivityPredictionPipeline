@@ -29,6 +29,9 @@ public:
         catch (...) {
             PyErr_SetString(PyExc_RuntimeError, "Unknown error");
         }
+        if (!randomForestManagerIsUsable(_manager)) {
+            throw std::runtime_error("RF Manager not usable, unknown reason");
+        }
         _n_classes = -1;
         _accelOnly = accelOnly;
     }

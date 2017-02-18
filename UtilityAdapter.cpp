@@ -14,7 +14,6 @@ py::object UtilityAdapter::interpolateRegular(
         py::list& inputX, py::list& inputY,
         float newSpacing, int outputLength)
 {
-
     if (py::len(inputX) != py::len(inputY)) {
         throw length_error("Cannot interpolate X and Y different lengths");
     }
@@ -30,10 +29,10 @@ py::object UtilityAdapter::interpolateRegular(
         outputLength,
         newSpacing);
 
-    if (successful) {
-        return listFromVector(outputVec);
+    if (!successful) {
+        throw range_error("Insufficient data to interpolate up to desired length");
     }
-    return py::object(); // return None
+    return listFromVector(outputVec);
 }
 
 BOOST_PYTHON_MODULE(utilityadapter)
