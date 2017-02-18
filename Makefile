@@ -88,5 +88,5 @@ utilityadapter.oo: UtilityAdapter.cpp UtilityAdapter.hpp util.hpp ActivityPredic
 clean:
 	rm -f *.oo *.o *.so
 
-install:
-	cp -v *.so ../
+#install:
+#	cp -v *.so ../
