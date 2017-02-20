@@ -12,7 +12,7 @@ UtilityAdapter::~UtilityAdapter() {
 
 py::object UtilityAdapter::interpolateLinearRegular(
         py::list& inputX, py::list& inputY,
-        float newSpacing, int outputLength)
+        float newSpacing, int outputLength, float initialOffset)
 {
     if (py::len(inputX) != py::len(inputY)) {
         throw length_error("Cannot interpolate X and Y different lengths");
@@ -27,7 +27,8 @@ py::object UtilityAdapter::interpolateLinearRegular(
         inputXVec.size(),
         outputVec.data(),
         outputLength,
-        newSpacing);
+        newSpacing,
+        initialOffset);
 
     if (!successful) {
         throw range_error("Insufficient data to interpolate up to desired length");
@@ -37,7 +38,7 @@ py::object UtilityAdapter::interpolateLinearRegular(
 
 py::object UtilityAdapter::interpolateSplineRegular(
         py::list& inputX, py::list& inputY,
-        float newSpacing, int outputLength)
+        float newSpacing, int outputLength, float initialOffset)
 {
     if (py::len(inputX) != py::len(inputY)) {
         throw length_error("Cannot interpolate X and Y different lengths");
@@ -52,7 +53,8 @@ py::object UtilityAdapter::interpolateSplineRegular(
         inputXVec.size(),
         outputVec.data(),
         outputLength,
-        newSpacing);
+        newSpacing,
+        initialOffset);
 
     if (!successful) {
         throw range_error("Insufficient data to interpolate up to desired length");
@@ -60,11 +62,19 @@ py::object UtilityAdapter::interpolateSplineRegular(
     return listFromVector(outputVec);
 }
 
+BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(UtilityAdapter_interpolateSplineRegular_overloads, UtilityAdapter::interpolateSplineRegular, 4, 5);
+BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(UtilityAdapter_interpolateLinearRegular_overloads, UtilityAdapter::interpolateLinearRegular, 4, 5);
 
 BOOST_PYTHON_MODULE(utilityadapter)
 {
     py::class_<UtilityAdapter>("UtilityAdapter", py::init<>())
-        .def("interpolateLinearRegular", &UtilityAdapter::interpolateLinearRegular)
-        .def("interpolateSplineRegular", &UtilityAdapter::interpolateSplineRegular)
+        .def("interpolateLinearRegular", &UtilityAdapter::interpolateLinearRegular,
+            UtilityAdapter_interpolateLinearRegular_overloads(
+                py::args("initialOffset"), ""
+            ))
+        .def("interpolateSplineRegular", &UtilityAdapter::interpolateSplineRegular,
+            UtilityAdapter_interpolateSplineRegular_overloads(
+                py::args("initialOffset"), ""
+            ))
     ;
 }
