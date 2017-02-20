@@ -7,7 +7,8 @@ public:
     UtilityAdapter();
     ~UtilityAdapter();
 
-    py::object interpolateRegular(py::list& inputX, py::list& inputY, float newSpacing, int outputLength);
+    py::object interpolateLinearRegular(py::list& inputX, py::list& inputY, float newSpacing, int outputLength);
+    py::object interpolateSplineRegular(py::list& inputX, py::list& inputY, float newSpacing, int outputLength);
 
 protected:
 };

@@ -7,7 +7,7 @@
 #include "ActivityPredictor/RandomForestManager.h"
 #include "util.hpp"
 
-using namespace boost::python;
+namespace py = boost::python;
 using namespace std;
 
 #ifndef PYTHON_MODULE_NAME
@@ -18,10 +18,11 @@ using namespace std;
 
 class RandomForest {
 public:
-    RandomForest(int sampleSize, int samplingRateHz, std::string pathToModelFile, bool accelOnly) {
+    RandomForest(int sampleSize, int samplingRateHz, py::object pathToModelFile) {
         _sampleSize = sampleSize;
+        py::extract<char const*> modelPath(pathToModelFile);
         try {
-            _manager = createRandomForestManager(sampleSize, samplingRateHz, pathToModelFile.c_str(), accelOnly);
+            _manager = createRandomForestManager(sampleSize, samplingRateHz, modelPath.check() ? modelPath() : NULL);
         }
         catch (std::exception& e) {
             PyErr_SetString(PyExc_RuntimeError, e.what());
@@ -29,78 +30,58 @@ public:
         catch (...) {
             PyErr_SetString(PyExc_RuntimeError, "Unknown error");
         }
-        if (!randomForestManagerIsUsable(_manager)) {
-            throw std::runtime_error("RF Manager not usable, unknown reason");
-        }
         _n_classes = -1;
-        _accelOnly = accelOnly;
     }
     ~RandomForest() {
         deleteRandomForestManager(_manager);
     }
 
-    list predict_proba(list& norms, list& norms2) {
+    py::list classifyMagnitudes(py::list& norms) {
+        _checkCanPredict();
         _checkClassCount();
         _checkNorms(norms);
         auto normsVec = vectorFromList<float>(norms);
 
         auto confidences = vector<float>(_n_classes);
 
-        if (_accelOnly) {
-            randomForestClassificationConfidencesAccelerometerOnly(_manager, normsVec.data(), confidences.data(), _n_classes);
-        }
-        else {
-            _checkNorms(norms2);
-            auto normsVec2 = vectorFromList<float>(norms2);
-            randomForestClassificationConfidences( _manager, normsVec.data(), normsVec2.data(), confidences.data(), _n_classes);
-        }
+        randomForestClassifyMagnitudeVector( _manager, normsVec.data(), confidences.data(), _n_classes);
 
-        list ret;
-        for (float value : confidences) {
-            ret.append(value);
-        }
-        return ret;
+        return listFromVector(confidences);
     }
 
-    list prepareFeatures(list& norms, list& norms2) {
+    py::list classifyFeatures(py::list& features) {
+        _checkCanPredict();
+        _checkClassCount();
+        _checkFeatures(features);
+        auto featuresVec = vectorFromList<float>(features);
+        auto confidences = vector<float>(_n_classes);
+
+        randomForestClassifyFeatures(_manager, featuresVec.data(), confidences.data(), _n_classes);
+
+        return listFromVector(confidences);
+    }
+
+    py::list prepareFeatures(py::list& norms, py::list& norms2) {
         _checkNorms(norms);
         auto normsVec = vectorFromList<float>(norms);
         auto featuresVec = vector<float>(getFeatureCount(), 0.0);
 
-        if (_accelOnly) {
-            prepFeatureVectorAccelerometerOnly(_manager, featuresVec.data(), normsVec.data());
-        }
-        else {
-            _checkNorms(norms2);
-            auto normsVec2 = vectorFromList<float>(norms2);
-            prepFeatureVector(_manager, featuresVec.data(), normsVec.data(), normsVec2.data());
-        }
+        prepFeatureVector(_manager, featuresVec.data(), normsVec.data());
 
-        list ret;
-        for (float value : featuresVec) {
-            ret.append(value);
-        }
-        return ret;
+        return listFromVector(featuresVec);
     }
 
     int getFeatureCount() {
-        if (_accelOnly) {
-            return RANDOM_FOREST_VECTOR_SIZE_ACCELEROMETER_ONLY;
-        }
-        else {
-            return RANDOM_FOREST_VECTOR_SIZE;
-        }
+        return RANDOM_FOREST_VECTOR_SIZE;
     }
 
-    list classLabels() {
+    py::list classLabels() {
+        _checkCanPredict();
         _checkClassCount();
         auto labelsVec = vector<int>(_n_classes, 0);
         randomForestGetClassLabels(_manager, labelsVec.data(), _n_classes);
-        list ret;
-        for (int value: labelsVec) {
-            ret.append(value);
-        }
-        return ret;
+
+        return listFromVector(labelsVec);
     }
 
 
@@ -108,11 +89,15 @@ protected:
     RandomForestManager* _manager;
     int _sampleSize;
     int _n_classes;
-    bool _accelOnly;
-
-    void _checkNorms(list& norms) {
-        if (len(norms) != _sampleSize) {
+    void _checkNorms(py::list& norms) {
+        if (py::len(norms) != _sampleSize) {
             throw std::length_error("Cannot classify vector with length that does not match sample size");
+        }
+    }
+
+    void _checkFeatures(py::list& features) {
+        if (py::len(features) != RANDOM_FOREST_VECTOR_SIZE) {
+            throw std::length_error("Cannot classify features with length that does not match expected feature count");
         }
     }
 
@@ -122,14 +107,20 @@ protected:
         }
     }
 
+    void _checkCanPredict() {
+        if (!randomForestManagerCanPredict(_manager)) {
+            throw std::runtime_error("RF Manager cannot predict");
+        }
+    }
 };
 
 
 BOOST_PYTHON_MODULE(PYTHON_MODULE_NAME)
 {
-    class_<RandomForest>("RandomForest", init<int, int, std::string, bool>())
+    py::class_<RandomForest>("RandomForest", py::init<int, int, py::object>())
         .def("prepareFeatures", &RandomForest::prepareFeatures)
-        .def("predict_proba", &RandomForest::predict_proba)
+        .def("classifyFeatures", &RandomForest::classifyFeatures)
+        .def("classifyMagnitudes", &RandomForest::classifyMagnitudes)
         .def("classLabels", &RandomForest::classLabels)
         .def("getFeatureCount", &RandomForest::getFeatureCount)
         .add_property("feature_count", &RandomForest::getFeatureCount)
