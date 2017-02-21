@@ -1,0 +1,27 @@
+apply plugin: 'java'
+repositories {
+  jcenter()
+  mavenCentral()
+}
+dependencies {
+  compile "org.mockito:mockito-core:2.+"
+  // https://mvnrepository.com/artifact/net.java.dev.jna/jna
+  compile group: 'net.java.dev.jna', name: 'jna-platform', version: '4.3.0'
+
+  // https://mvnrepository.com/artifact/org.json/json
+  compile group: 'org.json', name: 'json', version: '20160810'
+}
+jar {
+  manifest {
+    attributes 'Main-Class' : 'com.knock.ridereport.sensor.RandomForest.TesterApp'
+  }
+}
+task fatJar(type: Jar) {
+    baseName = project.name + '-all'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+
+    manifest {
+      attributes 'Main-Class' : 'com.knock.ridereport.sensor.RandomForest.TesterApp'
+    }
+    with jar
+}

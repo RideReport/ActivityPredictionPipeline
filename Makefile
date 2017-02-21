@@ -25,13 +25,13 @@ COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/
 
 ifeq ($(SNAME), Linux)
 
-all: rr_mode_classification_opencv.so opencv_fft.so utilityadapter.so
+all: rr_mode_classification_opencv.so opencv_fft.so utilityadapter.so librrnative.so
 
 endif
 
 ifeq ($(SNAME), Darwin)
 
-all: rr_mode_classification_opencv.so rr_mode_classification_apple.so apple_fft.so opencv_fft.so
+all: rr_mode_classification_opencv.so rr_mode_classification_apple.so apple_fft.so opencv_fft.so utilityadapter.so librrnative.so
 
 rr_mode_classification_apple.so: rr_mode_classification_apple.oo randomforestmanager.oo fftmanager.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
@@ -53,13 +53,16 @@ opencv_fft.so: opencv_fft.oo fftmanager_opencv.oo
 utilityadapter.so: utilityadapter.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
+librrnative.so: randomforestmanager.oo fftmanager_opencv.oo
+	$(CC) $^ -shared $(LFLAGS) -o $@
+
 rr_mode_classification_apple.oo: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
 	$(COMPILE) -DPYTHON_MODULE_NAME=rr_mode_classification_apple
 
 rr_mode_classification_opencv.oo: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
 	$(COMPILE) -DPYTHON_MODULE_NAME=rr_mode_classification_opencv
 
-randomforestmanager.oo: ActivityPredictor/RandomForestManager.cpp ActivityPredictor/RandomForestManager.h ActivityPredictor/FFTManager.h
+randomforestmanager.oo: ActivityPredictor/RandomForestManager.cpp ActivityPredictor/RandomForestManager.h ActivityPredictor/FFTManager.h ActivityPredictor/Utility.cpp
 	$(COMPILE)
 
 fftmanager.oo: ActivityPredictor/FFTManager.cpp
