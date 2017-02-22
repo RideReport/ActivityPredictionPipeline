@@ -56,7 +56,12 @@ public class RandomForestAdapterJNA implements RandomForestAdapter {
             System.loadLibrary("jnidispatch");
         }
         catch (UnsatisfiedLinkError e) {
-            Timber.d("Failed to load jnidispatch; trying to load Native anyway.");
+            if (System.getProperty("java.vm.name").equalsIgnoreCase("Dalvik")) {
+                Timber.d("Failed to load jnidispatch; trying to load Native anyway.");
+            }
+            else {
+                Timber.d("jnidispatch did not load; this is usually OK off Android");
+            }
         }
         Native.register(RandomForestAdapterJNA.class, "rrnative");
     }

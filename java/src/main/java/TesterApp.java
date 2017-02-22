@@ -28,8 +28,6 @@ public class TesterApp {
         }
         RandomForestAdapterJNA adapter = new RandomForestAdapterJNA(64, 20, forestPath);
 
-        System.err.println("Reading JSON from stdin");
-
         try {
             BufferedReader inputReader = new BufferedReader(new InputStreamReader(System.in));
             System.out.println(readyObject(adapter).toString());

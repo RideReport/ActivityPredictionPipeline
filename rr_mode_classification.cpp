@@ -86,7 +86,7 @@ public:
         return listFromVector(confidences);
     }
 
-    py::list prepareFeatures(py::list& norms, py::list& norms2) {
+    py::list prepareFeatures(py::list& norms) {
         _checkNorms(norms);
         auto normsVec = vectorFromList<float>(norms);
         auto featuresVec = vector<float>(getFeatureCount(), 0.0);
