@@ -6,6 +6,10 @@ import java.io.FileNotFoundException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.StringWriter;
+import java.io.PrintWriter;
+
+import java.util.ArrayList;
 
 import org.json.*;
 
@@ -21,7 +25,6 @@ public class TesterApp {
         String forestPath = "data/forestAccelOnly.cv";
         if (args.length >= 1) {
             forestPath = args[0];
-            System.out.println(forestPath);
         }
         RandomForestAdapterJNA adapter = new RandomForestAdapterJNA(64, 20, forestPath);
 
@@ -55,21 +58,49 @@ public class TesterApp {
             return errorObject(e.toString()).toString();
         }
 
-        if (method.equals("predictConfidences")) {
-            try {
-                JSONObject output = doPredictConfidences(adapter, obj);
-                return output.toString();
+        try {
+            if (method.equals("predictConfidences")) {
+                return doPredictConfidences(adapter, obj).toString();
             }
-            catch (JSONException e) {
-                return errorObject(e.toString()).toString();
+            else if (method.equals("classifyAccelerometerSignal")) {
+                return doClassifyAccelerometerSignal(adapter, obj).toString();
             }
-            catch (Exception e) {
-                return errorObject(e.toString()).toString();
+            else {
+                return errorObject("Unknown method '" + method + "'").toString();
             }
         }
-        else {
-            return errorObject("Unknown method '" + method + "'").toString();
+        catch (Exception e) {
+            StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw);
+            e.printStackTrace(pw);
+            return errorObject(sw.toString()).toString();
         }
+    }
+
+    public static JSONObject doClassifyAccelerometerSignal(RandomForestAdapterJNA adapter, JSONObject obj) throws JSONException, IllegalArgumentException {
+        JSONArray readingsJson = obj.getJSONArray("readings");
+
+        ArrayList<RandomForestAdapterJNA.SensorDataInterface> sensorDataList = new ArrayList<>(readingsJson.length());
+
+        for (int i = 0; i < readingsJson.length(); ++i) {
+            JSONObject reading = readingsJson.getJSONObject(i);
+            MockSensorData sensorData = new MockSensorData();
+
+            sensorData.x = (float) reading.getDouble("x");
+            sensorData.y = (float) reading.getDouble("y");
+            sensorData.z = (float) reading.getDouble("z");
+            sensorData.t = (float) reading.getDouble("t");
+            sensorDataList.add(i, sensorData);
+            System.err.println("sensorData " + sensorData.x + " " + sensorData.y + " " + sensorData.z + " " + sensorData.t);
+        }
+        float[] confidences = adapter.classifyAccelerometerSignal(sensorDataList);
+        int[] labels = adapter.getClassLabels();
+
+        JSONObject output = new JSONObject();
+        for (int i = 0; i < labels.length; ++i) {
+            output.put(Integer.toString(labels[i]), confidences[i]);
+        }
+        return output;
     }
 
     public static JSONObject doPredictConfidences(RandomForestAdapterJNA adapter, JSONObject obj) throws JSONException, IllegalArgumentException {
@@ -99,5 +130,17 @@ public class TesterApp {
         JSONObject output = new JSONObject();
         output.put("ready", true);
         return output;
+    }
+
+    static class MockSensorData implements RandomForestAdapterJNA.SensorDataInterface {
+        public float x;
+        public float y;
+        public float z;
+        public float t;
+
+        public float getX() { return x; }
+        public float getY() { return y; }
+        public float getZ() { return z; }
+        public float getFloatSeconds() { return t; }
     }
 }

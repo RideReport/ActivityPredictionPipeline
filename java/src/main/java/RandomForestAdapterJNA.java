@@ -1,6 +1,8 @@
 package com.knock.ridereport.sensor.RandomForest;
 
 import com.sun.jna.Native;
+import com.sun.jna.Structure;
+import com.sun.jna.Pointer;
 import com.sun.jna.PointerType;
 
 import java.io.File;
@@ -8,6 +10,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -20,11 +23,32 @@ import timber.log.Timber;
  */
 public class RandomForestAdapterJNA implements RandomForestAdapter {
     public static class RFManagerPtr extends PointerType {}
+    public interface SensorDataInterface {
+        public float getX();
+        public float getY();
+        public float getZ();
+        public float getFloatSeconds();
+    };
+
+    public static class AccelerometerReading extends Structure {
+        public static class ByReference extends AccelerometerReading implements Structure.ByReference {}
+
+        public float x;
+        public float y;
+        public float z;
+        public float t;
+
+        @Override
+        protected List<String> getFieldOrder() {
+            return Arrays.asList(new String[] { "x", "y", "z", "t" });
+        }
+    }
 
     private static native RFManagerPtr createRandomForestManager(int sampleCount, int samplingRateHz, String pathToModelFile);
     private static native void randomForestClassifyMagnitudeVector(RFManagerPtr manager, float[] accNorms, float[] confidences, int n_classes);
     private static native int randomForestGetClassCount(RFManagerPtr manager);
     private static native void randomForestGetClassLabels(RFManagerPtr manager, int[] labels, int labelCount);
+    private static native boolean randomForestClassifyAccelerometerSignal(RFManagerPtr manager, AccelerometerReading.ByReference signal, int readingCount, float[] confidences, int n_classes);
     private static native void prepFeatureVector(RFManagerPtr manager, float[] features, float[] accNorms);
 
     static {
@@ -83,6 +107,31 @@ public class RandomForestAdapterJNA implements RandomForestAdapter {
         Timber.d("labels: " + Arrays.toString(_classLabels));
         Timber.d("confidences: " + Arrays.toString(confidences));
 
+        return confidences;
+    }
+
+    public float[] classifyAccelerometerSignal(List<SensorDataInterface> sensorDataList) {
+        // Structure.toArray() allocates a contiguous memory block for the structs
+        final AccelerometerReading[] readings = (AccelerometerReading[]) (new AccelerometerReading.ByReference()).toArray(sensorDataList.size());
+
+        for (int i = 0; i < readings.length; ++i) {
+            SensorDataInterface sensorData = sensorDataList.get(i);
+            readings[i].x = sensorData.getX();
+            readings[i].y = sensorData.getY();
+            readings[i].z = sensorData.getZ();
+            readings[i].t = sensorData.getFloatSeconds();
+            System.err.println("java reading " + readings[i].x + " " + readings[i].y + " " + readings[i].z + " " + readings[i].t);
+        }
+
+        float[] confidences = new float[_classCount];
+
+        boolean successful = randomForestClassifyAccelerometerSignal(_manager, (AccelerometerReading.ByReference)readings[0], readings.length, confidences, _classCount);
+
+        if (!successful) {
+            Timber.d("classifyAccelerometerSignal failed");
+        }
+        Timber.d("classifyAccelerometerSignal labels: " + Arrays.toString(_classLabels));
+        Timber.d("classifyAccelerometerSignal confidences: " + Arrays.toString(confidences));
         return confidences;
     }
 
