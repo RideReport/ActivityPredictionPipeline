@@ -120,7 +120,6 @@ public class RandomForestAdapterJNA implements RandomForestAdapter {
             readings[i].y = sensorData.getY();
             readings[i].z = sensorData.getZ();
             readings[i].t = sensorData.getFloatSeconds();
-            System.err.println("java reading " + readings[i].x + " " + readings[i].y + " " + readings[i].z + " " + readings[i].t);
         }
 
         float[] confidences = new float[_classCount];

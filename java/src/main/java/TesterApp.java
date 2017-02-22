@@ -91,7 +91,6 @@ public class TesterApp {
             sensorData.z = (float) reading.getDouble("z");
             sensorData.t = (float) reading.getDouble("t");
             sensorDataList.add(i, sensorData);
-            System.err.println("sensorData " + sensorData.x + " " + sensorData.y + " " + sensorData.z + " " + sensorData.t);
         }
         float[] confidences = adapter.classifyAccelerometerSignal(sensorDataList);
         int[] labels = adapter.getClassLabels();
