@@ -115,7 +115,10 @@ public class RandomForestAdapterJNA implements RandomForestAdapter {
         return confidences;
     }
 
-    public float[] classifyAccelerometerSignal(List<SensorDataInterface> sensorDataList) {
+    public float[] classifyAccelerometerSignal(List<SensorDataInterface> sensorDataList) throws IllegalArgumentException {
+        if (sensorDataList.size() == 0) {
+            throw new IllegalArgumentException("Cannot classify empty list of sensor readings");
+        }
         // Structure.toArray() allocates a contiguous memory block for the structs
         final AccelerometerReading[] readings = (AccelerometerReading[]) (new AccelerometerReading.ByReference()).toArray(sensorDataList.size());
 

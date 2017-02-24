@@ -9,7 +9,13 @@ import java.io.InputStreamReader;
 import java.io.StringWriter;
 import java.io.PrintWriter;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.text.ParseException;
+
 import java.util.ArrayList;
+import java.util.Locale;
+import java.util.Date;
 
 import org.json.*;
 
@@ -63,8 +69,11 @@ public class TesterApp {
             else if (method.equals("classifyAccelerometerSignal")) {
                 return doClassifyAccelerometerSignal(adapter, obj).toString();
             }
+            else if (method.equals("classifyTSD")) {
+                return doClassifyTSD(adapter, obj).toString();
+            }
             else {
-                return errorObject("Unknown method '" + method + "'").toString();
+                return errorObject("Unknown methodz '" + method + "'").toString();
             }
         }
         catch (Exception e) {
@@ -98,6 +107,53 @@ public class TesterApp {
             output.put(Integer.toString(labels[i]), confidences[i]);
         }
         return output;
+    }
+
+    public static JSONObject doClassifyTSD(RandomForestAdapterJNA adapter, JSONObject obj) throws JSONException, ParseException, IllegalArgumentException {
+        JSONArray dataJson = obj.getJSONObject("tsd").getJSONArray("data");
+        DateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSZZZ", Locale.ENGLISH);
+
+        JSONArray output = new JSONArray();
+        for (int i = 0; i < dataJson.length(); ++i) {
+            JSONArray accJson = dataJson.getJSONObject(i).getJSONArray("accelerometerAccelerations");
+            ArrayList<RandomForestAdapterJNA.SensorDataInterface> sensorDataList = new ArrayList<>(accJson.length());
+
+            long originMillis = -1;
+            for (int j = 0; j < accJson.length(); ++j) {
+                JSONObject reading = accJson.getJSONObject(j);
+                MockSensorData sensorData = new MockSensorData();
+
+                sensorData.x = (float) reading.getDouble("x");
+                sensorData.y = (float) reading.getDouble("y");
+                sensorData.z = (float) reading.getDouble("z");
+                Date d = df.parse(reading.getString("date"));
+                if (j == 0) {
+                    originMillis = d.getTime();
+                }
+                sensorData.t = ((float)(d.getTime() - originMillis)) / 1000.f;
+                sensorDataList.add(j, sensorData);
+            }
+            try {
+                float[] confidences = adapter.classifyAccelerometerSignal(sensorDataList);
+                int[] labels = adapter.getClassLabels();
+
+                JSONObject rowOutput = new JSONObject();
+                for (int j = 0; j < labels.length; ++j) {
+                    rowOutput.put(Integer.toString(labels[j]), confidences[j]);
+                }
+                output.put(rowOutput); // append
+            }
+            catch (IllegalArgumentException e) {
+                StringWriter sw = new StringWriter();
+                PrintWriter pw = new PrintWriter(sw);
+                e.printStackTrace(pw);
+                output.put(errorObject(sw.toString()).toString());
+            }
+        }
+
+        JSONObject ret = new JSONObject();
+        ret.put("predictions", output);
+        return ret;
     }
 
     public static JSONObject doPredictConfidences(RandomForestAdapterJNA adapter, JSONObject obj) throws JSONException, IllegalArgumentException {

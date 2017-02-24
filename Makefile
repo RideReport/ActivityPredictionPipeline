@@ -25,13 +25,13 @@ COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/
 
 ifeq ($(SNAME), Linux)
 
-all: rr_mode_classification_opencv.so opencv_fft.so utilityadapter.so librrnative.so
+all: rr_mode_classification_opencv.so opencv_fft.so utilityadapter.so librrnative.so java/build/libs/java-all.jar
 
 endif
 
 ifeq ($(SNAME), Darwin)
 
-all: rr_mode_classification_opencv.so rr_mode_classification_apple.so apple_fft.so opencv_fft.so utilityadapter.so librrnative.so
+all: rr_mode_classification_opencv.so rr_mode_classification_apple.so apple_fft.so opencv_fft.so utilityadapter.so librrnative.so java/build/libs/java-all.jar
 
 rr_mode_classification_apple.so: rr_mode_classification_apple.oo randomforestmanager.oo fftmanager.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
@@ -40,6 +40,9 @@ apple_fft.so: apple_fft.oo fftmanager.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
 endif
+
+java/build/libs/java-all.jar: java/src/main/java/*.java
+	cd java && gradle
 
 rr_mode_classification_opencv.so: rr_mode_classification_opencv.oo randomforestmanager.oo fftmanager_opencv.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@

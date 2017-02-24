@@ -25,3 +25,5 @@ task fatJar(type: Jar) {
     }
     with jar
 }
+
+defaultTasks 'build', 'fatJar'
