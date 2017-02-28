@@ -14,16 +14,14 @@ AppleFFTPythonAdapter::~AppleFFTPythonAdapter() {
 }
 
 py::list AppleFFTPythonAdapter::fft(py::list input) {
-    auto inputVec = vectorFromList<float>(input); 
-    auto outputVec = vector<float>(_sampleSize);
-    ::fft((FFTManager*)_fft, inputVec.data(), inputVec.size(), outputVec.data());
-
-    py::list ret;
-    for (float value : outputVec) {
-        ret.append(value);
+    auto inputVec = vectorFromList<float>(input);
+    if (inputVec.size() < _sampleSize) {
+      throw std::runtime_error("Insufficient data; need at least sampleSize inputs");
     }
+    auto outputVec = vector<float>(_sampleSize);
+    ::fft((FFTManager*)_fft, inputVec.data(), _sampleSize, outputVec.data());
 
-    return ret;
+    return listFromVector<float>(outputVec);
 }
 
 BOOST_PYTHON_MODULE(apple_fft)
