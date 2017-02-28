@@ -64,26 +64,27 @@ public:
     py::list classifySignal(py::list& readingsList) {
         _checkCanPredict();
         _checkClassCount();
-        int listLength = py::len(readingsList);
-        AccelerometerReading* readings = new AccelerometerReading[listLength];
-        for (int i = 0; i < listLength; ++i) {
-            py::dict readingDict = py::extract<py::dict>(readingsList[i]);
-            readings[i].x = py::extract<float>(readingDict['x']);
-            readings[i].y = py::extract<float>(readingDict['y']);
-            readings[i].z = py::extract<float>(readingDict['z']);
-            readings[i].t = py::extract<float>(readingDict['t']);
-            // cerr << "reading i=" << i << " " << readings[i].x << " " << readings[i].y << " " << readings[i].z << " t=" << readings[i].t << endl;
-        }
-
+        auto readings = readingsFromList(readingsList);
         auto confidences = vector<float>(_n_classes);
-        bool successful = randomForestClassifyAccelerometerSignal(_manager, readings, listLength, confidences.data(), _n_classes);
-        delete[] readings;
+        bool successful = randomForestClassifyAccelerometerSignal(_manager, readings.data(), readings.size(), confidences.data(), _n_classes);
 
         if (!successful) {
             throw std::runtime_error("Failed to classify signal; probably not enough data");
         }
 
         return listFromVector(confidences);
+    }
+
+    py::list prepareFeaturesFromSignal(py::list& readingsList, float offsetSeconds = 0.f) {
+        auto readings = readingsFromList(readingsList);
+        auto features = vector<float>(RANDOM_FOREST_VECTOR_SIZE);
+        bool successful = randomForestPrepareFeaturesFromAccelerometerSignal(_manager, readings.data(), readings.size(), features.data(), features.size(), offsetSeconds);
+
+        if (!successful) {
+            throw std::runtime_error("Failed to prepare features; probably not enough data");
+        }
+
+        return listFromVector(features);
     }
 
     py::list prepareFeatures(py::list& norms) {
@@ -137,8 +138,23 @@ protected:
             throw std::runtime_error("RF Manager cannot predict");
         }
     }
+
+    vector<AccelerometerReading> readingsFromList(py::list& readingsList) {
+        int listLength = py::len(readingsList);
+        auto readings = vector<AccelerometerReading>(listLength);
+        for (int i = 0; i < listLength; ++i) {
+            py::dict readingDict = py::extract<py::dict>(readingsList[i]);
+            readings[i].x = py::extract<float>(readingDict['x']);
+            readings[i].y = py::extract<float>(readingDict['y']);
+            readings[i].z = py::extract<float>(readingDict['z']);
+            readings[i].t = py::extract<float>(readingDict['t']);
+            // cerr << "reading i=" << i << " " << readings[i].x << " " << readings[i].y << " " << readings[i].z << " t=" << readings[i].t << endl;
+        }
+        return readings;
+    }
 };
 
+BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(RandomForest_prepareFeaturesFromSignal_overloads, RandomForest::prepareFeaturesFromSignal, 1, 2);
 
 BOOST_PYTHON_MODULE(PYTHON_MODULE_NAME)
 {
@@ -147,6 +163,10 @@ BOOST_PYTHON_MODULE(PYTHON_MODULE_NAME)
         .def("classifyFeatures", &RandomForest::classifyFeatures)
         .def("classifyMagnitudes", &RandomForest::classifyMagnitudes)
         .def("classifySignal", &RandomForest::classifySignal)
+        .def("prepareFeaturesFromSignal", &RandomForest::prepareFeaturesFromSignal,
+            RandomForest_prepareFeaturesFromSignal_overloads(
+                py::args("offsetSeconds"), ""
+            ))
         .def("classLabels", &RandomForest::classLabels)
         .def("getFeatureCount", &RandomForest::getFeatureCount)
         .add_property("feature_count", &RandomForest::getFeatureCount)
