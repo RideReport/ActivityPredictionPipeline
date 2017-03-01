@@ -34,7 +34,7 @@ ifeq ($(SNAME), Darwin)
 
 all: rr_mode_classification_opencv.so rr_mode_classification_apple.so apple_fft.so opencv_fft.so utilityadapter.so librrnative.so java/build/libs/java-all.jar
 
-rr_mode_classification_apple.so: rr_mode_classification_apple.oo randomforestmanager.oo fftmanager.oo
+rr_mode_classification_apple.so: rr_mode_classification_apple.oo randomforestmanager.oo fftmanager.oo utility.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
 apple_fft.so: apple_fft.oo fftmanager.oo
@@ -45,7 +45,7 @@ endif
 java/build/libs/java-all.jar: java/src/main/java/*.java
 	cd java && gradle
 
-rr_mode_classification_opencv.so: rr_mode_classification_opencv.oo randomforestmanager.oo fftmanager_opencv.oo
+rr_mode_classification_opencv.so: rr_mode_classification_opencv.oo randomforestmanager.oo fftmanager_opencv.oo utility.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
 fftw_fft.so: fftw_fft.oo fftmanager_fftw.oo
@@ -57,7 +57,7 @@ opencv_fft.so: opencv_fft.oo fftmanager_opencv.oo
 utilityadapter.so: utilityadapter.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
-librrnative.so: randomforestmanager.oo fftmanager_opencv.oo
+librrnative.so: randomforestmanager.oo fftmanager_opencv.oo utility.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
 rr_mode_classification_apple.oo: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
@@ -66,7 +66,7 @@ rr_mode_classification_apple.oo: rr_mode_classification.cpp ActivityPredictor/Ra
 rr_mode_classification_opencv.oo: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
 	$(COMPILE) -DPYTHON_MODULE_NAME=rr_mode_classification_opencv
 
-randomforestmanager.oo: ActivityPredictor/RandomForestManager.cpp ActivityPredictor/RandomForestManager.h ActivityPredictor/FFTManager.h ActivityPredictor/Utility.cpp
+randomforestmanager.oo: ActivityPredictor/RandomForestManager.cpp ActivityPredictor/RandomForestManager.h ActivityPredictor/FFTManager.h ActivityPredictor/Utility.h
 	$(COMPILE)
 
 fftmanager.oo: ActivityPredictor/FFTManager.cpp
@@ -85,6 +85,9 @@ fftw_fft.oo: FFTWPythonAdapter.cpp FFTWPythonAdapter.hpp util.hpp ActivityPredic
 	$(COMPILE)
 
 opencv_fft.oo: OpenCVFFTPythonAdapter.cpp OpenCVFFTPythonAdapter.hpp util.hpp ActivityPredictor/FFTManager.h
+	$(COMPILE)
+
+utility.oo: ActivityPredictor/Utility.cpp ActivityPredictor/Utility.h
 	$(COMPILE)
 
 utilityadapter.oo: UtilityAdapter.cpp UtilityAdapter.hpp util.hpp ActivityPredictor/Utility.cpp

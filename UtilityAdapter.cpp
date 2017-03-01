@@ -10,32 +10,6 @@ UtilityAdapter::UtilityAdapter() {
 UtilityAdapter::~UtilityAdapter() {
 }
 
-py::object UtilityAdapter::interpolateLinearRegular(
-        py::list& inputX, py::list& inputY,
-        float newSpacing, int outputLength, float initialOffset)
-{
-    if (py::len(inputX) != py::len(inputY)) {
-        throw length_error("Cannot interpolate X and Y different lengths");
-    }
-    auto inputXVec = vectorFromList<float>(inputX);
-    auto inputYVec = vectorFromList<float>(inputY);
-    auto outputVec = vector<float>(outputLength, 0.0);
-
-    bool successful = ::interpolateLinearRegular(
-        inputXVec.data(),
-        inputYVec.data(),
-        inputXVec.size(),
-        outputVec.data(),
-        outputLength,
-        newSpacing,
-        initialOffset);
-
-    if (!successful) {
-        throw range_error("Insufficient data to interpolate up to desired length");
-    }
-    return listFromVector(outputVec);
-}
-
 py::object UtilityAdapter::interpolateSplineRegular(
         py::list& inputX, py::list& inputY,
         float newSpacing, int outputLength, float initialOffset)
@@ -63,15 +37,10 @@ py::object UtilityAdapter::interpolateSplineRegular(
 }
 
 BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(UtilityAdapter_interpolateSplineRegular_overloads, UtilityAdapter::interpolateSplineRegular, 4, 5);
-BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(UtilityAdapter_interpolateLinearRegular_overloads, UtilityAdapter::interpolateLinearRegular, 4, 5);
 
 BOOST_PYTHON_MODULE(utilityadapter)
 {
     py::class_<UtilityAdapter>("UtilityAdapter", py::init<>())
-        .def("interpolateLinearRegular", &UtilityAdapter::interpolateLinearRegular,
-            UtilityAdapter_interpolateLinearRegular_overloads(
-                py::args("initialOffset"), ""
-            ))
         .def("interpolateSplineRegular", &UtilityAdapter::interpolateSplineRegular,
             UtilityAdapter_interpolateSplineRegular_overloads(
                 py::args("initialOffset"), ""

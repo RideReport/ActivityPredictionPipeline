@@ -124,7 +124,7 @@ protected:
             readings[i].x = py::extract<float>(readingDict['x']);
             readings[i].y = py::extract<float>(readingDict['y']);
             readings[i].z = py::extract<float>(readingDict['z']);
-            readings[i].t = py::extract<float>(readingDict['t']);
+            readings[i].t = py::extract<double>(readingDict['t']);
             // cerr << "reading i=" << i << " " << readings[i].x << " " << readings[i].y << " " << readings[i].z << " t=" << readings[i].t << endl;
         }
         return readings;

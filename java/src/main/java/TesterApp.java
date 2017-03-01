@@ -63,10 +63,7 @@ public class TesterApp {
         }
 
         try {
-            if (method.equals("predictConfidences")) {
-                return doPredictConfidences(adapter, obj).toString();
-            }
-            else if (method.equals("classifyAccelerometerSignal")) {
+            if (method.equals("classifyAccelerometerSignal")) {
                 return doClassifyAccelerometerSignal(adapter, obj).toString();
             }
             else if (method.equals("classifyTSD")) {
@@ -96,7 +93,7 @@ public class TesterApp {
             sensorData.x = (float) reading.getDouble("x");
             sensorData.y = (float) reading.getDouble("y");
             sensorData.z = (float) reading.getDouble("z");
-            sensorData.t = (float) reading.getDouble("t");
+            sensorData.t = (double) reading.getDouble("t");
             sensorDataList.add(i, sensorData);
         }
         float[] confidences = adapter.classifyAccelerometerSignal(sensorDataList);
@@ -130,7 +127,7 @@ public class TesterApp {
                 if (j == 0) {
                     originMillis = d.getTime();
                 }
-                sensorData.t = ((float)(d.getTime() - originMillis)) / 1000.f;
+                sensorData.t = ((d.getTime() - originMillis)) / 1000.f;
                 sensorDataList.add(j, sensorData);
             }
             try {
@@ -156,22 +153,6 @@ public class TesterApp {
         return ret;
     }
 
-    public static JSONObject doPredictConfidences(RandomForestAdapterJNA adapter, JSONObject obj) throws JSONException, IllegalArgumentException {
-        JSONArray accNormsJson = obj.getJSONArray("accNorms");
-        float[] accNorms = new float[accNormsJson.length()];
-        for (int i = 0; i < accNorms.length; ++i) {
-            accNorms[i] = (float) accNormsJson.getDouble(i);
-        }
-        float[] confidences = adapter.predictConfidences(accNorms);
-        int[] labels = adapter.getClassLabels();
-
-        JSONObject output = new JSONObject();
-        for (int i = 0; i < labels.length; ++i) {
-            output.put(Integer.toString(labels[i]), confidences[i]);
-        }
-        return output;
-    }
-
     public static JSONObject errorObject(String detail) {
         JSONObject output = new JSONObject();
         output.put("detail", detail);
@@ -189,11 +170,11 @@ public class TesterApp {
         public float x;
         public float y;
         public float z;
-        public float t;
+        public double t;
 
         public float getX() { return x; }
         public float getY() { return y; }
         public float getZ() { return z; }
-        public float getFloatSeconds() { return t; }
+        public double getSeconds() { return t; }
     }
 }

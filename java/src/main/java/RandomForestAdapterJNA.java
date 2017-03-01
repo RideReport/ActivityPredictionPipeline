@@ -25,7 +25,6 @@ public class RandomForestAdapterJNA implements RandomForestAdapter {
     public static class RFManagerPtr extends PointerType {}
 
     private static native RFManagerPtr createRandomForestManager(int sampleCount, int samplingRateHz, String pathToModelFile);
-    private static native void randomForestClassifyMagnitudeVector(RFManagerPtr manager, float[] accNorms, float[] confidences, int n_classes);
     private static native int randomForestGetClassCount(RFManagerPtr manager);
     private static native void randomForestGetClassLabels(RFManagerPtr manager, int[] labels, int labelCount);
     private static native boolean randomForestClassifyAccelerometerSignal(RFManagerPtr manager, AccelerometerReading.ByReference signal, int readingCount, float[] confidences, int n_classes);
