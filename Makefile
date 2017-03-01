@@ -17,9 +17,10 @@ LFLAGS = $(LFLAGS_COMMON) -Wl -framework Accelerate
 endif
 
 CC = g++
-CFLAGS = -g -std=c++11
+CFLAGS = -g -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/Frameworks/Python.framework/Headers -fPIC
 
-COMPILE = $(CC) $(CFLAGS) -I$(PYTHON_INCLUDE) -I/usr/local/include -I/usr/local/Frameworks/Python.framework/Headers -fPIC -o $@ -c $<
+COMPILE = $(CC) $(CFLAGS) -std=c++11 -o $@ -c $<
+COMPILE_C = $(CC) $(CFLAGS) -o $@ -c -x c $<
 
 .PHONY: all
 
@@ -86,7 +87,7 @@ fftw_fft.oo: FFTWPythonAdapter.cpp FFTWPythonAdapter.hpp util.hpp ActivityPredic
 opencv_fft.oo: OpenCVFFTPythonAdapter.cpp OpenCVFFTPythonAdapter.hpp util.hpp ActivityPredictor/FFTManager.h
 	$(COMPILE)
 
-utilityadapter.oo: UtilityAdapter.cpp UtilityAdapter.hpp util.hpp ActivityPredictor/Utility.cpp ActivityPredictor/spline.h
+utilityadapter.oo: UtilityAdapter.cpp UtilityAdapter.hpp util.hpp ActivityPredictor/Utility.cpp
 	$(COMPILE)
 
 .PHONY: clean install

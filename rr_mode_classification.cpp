@@ -36,19 +36,6 @@ public:
         deleteRandomForestManager(_manager);
     }
 
-    py::list classifyMagnitudes(py::list& norms) {
-        _checkCanPredict();
-        _checkClassCount();
-        _checkNorms(norms);
-        auto normsVec = vectorFromList<float>(norms);
-
-        auto confidences = vector<float>(_n_classes);
-
-        randomForestClassifyMagnitudeVector( _manager, normsVec.data(), confidences.data(), _n_classes);
-
-        return listFromVector(confidences);
-    }
-
     py::list classifyFeatures(py::list& features) {
         _checkCanPredict();
         _checkClassCount();
@@ -64,7 +51,7 @@ public:
     py::list classifySignal(py::list& readingsList) {
         _checkCanPredict();
         _checkClassCount();
-        auto readings = readingsFromList(readingsList);
+        auto readings = _readingsFromList(readingsList);
         auto confidences = vector<float>(_n_classes);
         bool successful = randomForestClassifyAccelerometerSignal(_manager, readings.data(), readings.size(), confidences.data(), _n_classes);
 
@@ -76,7 +63,7 @@ public:
     }
 
     py::list prepareFeaturesFromSignal(py::list& readingsList, float offsetSeconds = 0.f) {
-        auto readings = readingsFromList(readingsList);
+        auto readings = _readingsFromList(readingsList);
         auto features = vector<float>(RANDOM_FOREST_VECTOR_SIZE);
         bool successful = randomForestPrepareFeaturesFromAccelerometerSignal(_manager, readings.data(), readings.size(), features.data(), features.size(), offsetSeconds);
 
@@ -85,16 +72,6 @@ public:
         }
 
         return listFromVector(features);
-    }
-
-    py::list prepareFeatures(py::list& norms) {
-        _checkNorms(norms);
-        auto normsVec = vectorFromList<float>(norms);
-        auto featuresVec = vector<float>(getFeatureCount(), 0.0);
-
-        prepFeatureVector(_manager, featuresVec.data(), normsVec.data());
-
-        return listFromVector(featuresVec);
     }
 
     int getFeatureCount() {
@@ -139,7 +116,7 @@ protected:
         }
     }
 
-    vector<AccelerometerReading> readingsFromList(py::list& readingsList) {
+    vector<AccelerometerReading> _readingsFromList(py::list& readingsList) {
         int listLength = py::len(readingsList);
         auto readings = vector<AccelerometerReading>(listLength);
         for (int i = 0; i < listLength; ++i) {
@@ -159,9 +136,7 @@ BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(RandomForest_prepareFeaturesFromSignal_ov
 BOOST_PYTHON_MODULE(PYTHON_MODULE_NAME)
 {
     py::class_<RandomForest>("RandomForest", py::init<int, int, py::object>())
-        .def("prepareFeatures", &RandomForest::prepareFeatures)
         .def("classifyFeatures", &RandomForest::classifyFeatures)
-        .def("classifyMagnitudes", &RandomForest::classifyMagnitudes)
         .def("classifySignal", &RandomForest::classifySignal)
         .def("prepareFeaturesFromSignal", &RandomForest::prepareFeaturesFromSignal,
             RandomForest_prepareFeaturesFromSignal_overloads(
