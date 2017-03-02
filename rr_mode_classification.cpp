@@ -20,6 +20,7 @@ class RandomForest {
 public:
     RandomForest(int sampleSize, int samplingRateHz, py::object pathToModelFile) {
         _sampleSize = sampleSize;
+        _samplingRateHz = samplingRateHz;
         py::extract<char const*> modelPath(pathToModelFile);
         try {
             _manager = createRandomForestManager(sampleSize, samplingRateHz, modelPath.check() ? modelPath() : NULL);
@@ -78,6 +79,10 @@ public:
         return RANDOM_FOREST_VECTOR_SIZE;
     }
 
+    float getDesiredSignalDuration() {
+        return _sampleSize / (float)_samplingRateHz;
+    }
+
     py::list classLabels() {
         _checkCanPredict();
         _checkClassCount();
@@ -91,6 +96,7 @@ public:
 protected:
     RandomForestManager* _manager;
     int _sampleSize;
+    int _samplingRateHz;
     int _n_classes;
     void _checkNorms(py::list& norms) {
         if (py::len(norms) != _sampleSize) {
@@ -145,5 +151,6 @@ BOOST_PYTHON_MODULE(PYTHON_MODULE_NAME)
         .def("classLabels", &RandomForest::classLabels)
         .def("getFeatureCount", &RandomForest::getFeatureCount)
         .add_property("feature_count", &RandomForest::getFeatureCount)
+        .add_property("desired_signal_duration", &RandomForest::getDesiredSignalDuration)
     ;
 }
