@@ -124,10 +124,7 @@ public class TesterApp {
                 sensorData.y = (float) reading.getDouble("y");
                 sensorData.z = (float) reading.getDouble("z");
                 Date d = df.parse(reading.getString("date"));
-                if (j == 0) {
-                    originMillis = d.getTime();
-                }
-                sensorData.t = ((d.getTime() - originMillis)) / 1000.f;
+                sensorData.t = d.getTime() / 1000.;
                 sensorDataList.add(j, sensorData);
             }
             try {
