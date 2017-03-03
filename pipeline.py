@@ -125,11 +125,10 @@ class npSpeedReadingsMixin(object):
         if self.npSpeedReadings.shape[0] == 0:
             return None
         speeds = self.npSpeedReadings[:,SPEED_S]
-        meanSpeed = np.mean(speeds[speeds >= 0])
-        if np.isnan(meanSpeed):
+        try:
+            return np.mean(speeds[speeds >= 0])
+        except:
             return None
-        else:
-            return meanSpeed
 
 
 class ContinuousIntervalSample(npReadingsMixin, npSpeedReadingsMixin):
@@ -360,7 +359,7 @@ class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
 
     def getFreshInferredType(self, forest):
         try:
-            confidences = forest.classifySignal(readingsFromNPReadings(event.npReadings))
+            confidences = forest.classifySignal(readingsFromNPReadings(self.npReadings))
         except RuntimeError:
             return None
         predictions = { k: v for k, v in izip(forest.classLabels(), confidences) }
@@ -406,6 +405,7 @@ def derivativeIsOld(filename, derivativePattern):
         return True # one or both doesn't exist
 
 def updateSamplePickles(force_update=False):
+    print "Updating data/*.ciSamples.pickle..."
     pool = Pool()
     all_filenames = list(glob.glob("data/classification_data.*.jsonl"))
     filenames = [fname for fname in all_filenames if force_update or derivativeIsOld(fname, '{}.ciSamples.pickle')]
@@ -415,9 +415,13 @@ def updateSamplePickles(force_update=False):
             overall_sample_count += sample_count
     print "Completed {} samples from {}/{} files in {:.1f}s".format(overall_sample_count, len(filenames), len(all_filenames), t.elapsed)
 
-def updateFeatureSetsPickleFromCiSamplesPickle(filename):
+def updateFeatureSetsPickleFromCiSamplesPickle(platform, filename):
     with print_exceptions():
-        from rr_mode_classification_opencv import RandomForest
+        if platform == 'android':
+            from rr_mode_classification_opencv import RandomForest
+        elif platform == 'ios':
+            from rr_mode_classification_apple import RandomForest
+
         sampleCount = 64
         samplingRateHz = 20
         forest = RandomForest(sampleCount, samplingRateHz, None)
@@ -429,30 +433,32 @@ def updateFeatureSetsPickleFromCiSamplesPickle(filename):
             fset = LabeledFeatureSet.fromSample(ciSample, forest, 1./samplingRateHz)
             fset_list.append(fset)
 
-        with open('{}.fsets.pickle'.format(filename), 'wb') as f:
+        with open('{}.fsets.{}.pickle'.format(filename, platform), 'wb') as f:
             pickle.dump(fset_list, f, pickle.HIGHEST_PROTOCOL)
         return sum(len(fset.features) for fset in fset_list)
 
-def updateFeatureSets(force_update=False):
+def updateFeatureSets(force_update=False, platform='android'):
     from multiprocessing import Pool
     import glob
     import pickle
     from tqdm import tqdm
     pool = Pool()
 
+    print "Updating data/*.fsets.{}.pickle ...".format(platform)
+
     all_filenames = glob.glob('./data/*.ciSamples.pickle')
-    filenames = [fname for fname in all_filenames if force_update or derivativeIsOld(fname, '{}.fsets.pickle')]
+    filenames = [fname for fname in all_filenames if force_update or derivativeIsOld(fname, '{}.fsets.{}.pickle'.format('{}', platform))]
     overall_feature_count = 0
     with Timer() as t:
-        for feature_count in tqdm(pool.imap_unordered(updateFeatureSetsPickleFromCiSamplesPickle, filenames), total=len(filenames)):
+        for feature_count in tqdm(pool.imap_unordered(partial(updateFeatureSetsPickleFromCiSamplesPickle, platform), filenames), total=len(filenames)):
             overall_feature_count += feature_count
 
-    print "Generated {} rows of features from {}/{} files in {:.1f}s".format(feature_count, len(filenames), len(all_filenames), t.elapsed)
+    print "Generated {} rows of features from {}/{} files in {:.1f}s".format(overall_feature_count, len(filenames), len(all_filenames), t.elapsed)
 
-def getFeatureSetsFromAllTrainableTSDs():
+def getFeatureSetsFromAllTrainableTSDs(platform):
     filenames = glob.glob('./data/trusted_tsd.*.jsonl')
     pool = Pool()
-    return list(tqdm(pool.imap_unordered(getFeatureSetFromTrainableTSDFile, filenames), total=len(filenames)))
+    return list(tqdm(pool.imap_unordered(partial(getFeatureSetFromTrainableTSDFile, platform), filenames), total=len(filenames)))
 
 def getReportedActivityTypeWithOverrides(tsd):
     if tsd.reportedActivityType == 4 and 'run' in tsd.notes:
@@ -460,23 +466,27 @@ def getReportedActivityTypeWithOverrides(tsd):
         return 1
     return tsd.reportedActivityType
 
-def getFeatureSetFromTrainableTSDFile(filename):
+def getFeatureSetFromTrainableTSDFile(platform, filename):
     with print_exceptions():
-        from rr_mode_classification_opencv import RandomForest
+        if platform == 'android':
+            from rr_mode_classification_opencv import RandomForest
+        elif platform == 'ios':
+            from rr_mode_classification_apple import RandomForest
+
         forest = RandomForest(64, 20, None)
         tsd = loadTSD(filename, force_update=True)
         activityType = tsd.reportedActivityType
 
         return LabeledFeatureSet.fromTSDEvents(tsd.reportedActivityType, tsd.events, forest)
 
-def buildModelFromFeatureSetPickles(output_filename, split, exclude_labels, include_crowd_data=False):
+def buildModelFromFeatureSetPickles(output_filename, split, exclude_labels, include_crowd_data=False, platform='android'):
     all_sets = []
 
     if include_crowd_data:
         print "Loading whitelisted TSDs"
-        all_sets += getFeatureSetsFromAllTrainableTSDs()
+        all_sets += getFeatureSetsFromAllTrainableTSDs(platform)
 
-    filenames = glob.glob('./data/*.fsets.pickle')
+    filenames = glob.glob('./data/*.fsets.{}.pickle'.format(platform))
     with Timer() as t:
         for filename in filenames:
             with open(filename) as f:
@@ -512,7 +522,7 @@ def buildModelFromFeatureSetPickles(output_filename, split, exclude_labels, incl
 
 def loadTSD(filename, force_update=False):
 
-    pickleFilename = '{}.pickle'
+    pickleFilename = '{}.pickle'.format(filename)
     try:
         pickleTime = os.path.getmtime(pickleFilename)
     except:
@@ -542,12 +552,22 @@ def getFeaturesAndLabelsFromTSD(tsd, forest):
 
     return np.array(features, dtype=np.float32), np.array(labels, dtype=np.int32)
 
-def predictTSDFileWithFilters(forestPath, filename):
-    from rr_mode_classification_opencv import RandomForest
+def predictTSDFileWithFilters(forestPath, platform, filename):
+    if platform == 'android':
+        from rr_mode_classification_opencv import RandomForest
+    elif platform == 'ios':
+        from rr_mode_classification_apple import RandomForest
+
     with print_exceptions():
         forest = RandomForest(64, 20, forestPath)
         classLabels = forest.classLabels()
-        tsd = loadTSD(filename)
+        try:
+            tsd = loadTSD(filename)
+        except:
+            import traceback
+            print "Skipping TSD due to exception:"
+            traceback.print_exc()
+            return []
 
         confusion_tuples = []
         reportedActivityType = tsd.reportedActivityType
@@ -557,7 +577,7 @@ def predictTSDFileWithFilters(forestPath, filename):
                 continue
 
             # skip if speed is unknown
-            if event.averageSpeed is None or event.averageSpeed < 0:
+            if event.averageSpeed is None:
                 continue
 
             # skip if wrong speed for type
@@ -574,13 +594,16 @@ def predictTSDFileWithFilters(forestPath, filename):
             confusion_tuples.append((reportedActivityType, event.originalInferredActivityType, event.getFreshInferredType(forest)))
         return confusion_tuples
 
-def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0):
+def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android'):
     import glob
     import random
     import os
     from tqdm import tqdm
     from multiprocessing import Pool
-    from rr_mode_classification_opencv import RandomForest
+    if platform == 'android':
+        from rr_mode_classification_opencv import RandomForest
+    elif platform == 'ios':
+        from rr_mode_classification_apple import RandomForest
 
     forest = RandomForest(64, 20, forestPath)
     if not forest.canPredict():
@@ -605,7 +628,7 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0):
     old_confusion = {}
     with Timer() as t:
         pool = Pool()
-        tsd_files = glob.glob('./data/tsd*')
+        tsd_files = glob.glob('./data/tsd*.jsonl')
         if fraction < 1.0:
             tsd_files = random.sample(tsd_files, int(len(tsd_files)*fraction))
 
@@ -613,8 +636,14 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0):
         sorted_files = sorted(tsd_files, key=lambda filename: os.path.getsize(filename), reverse=True)
 
         prediction_count = 0
-        for predictions in tqdm(pool.imap_unordered(partial(predictTSDFileWithFilters, forestPath), sorted_files), total=len(sorted_files)):
-            for reported_type, old_type, fresh_type in predictions:
+        for predictions in tqdm(pool.imap_unordered(partial(predictTSDFileWithFilters, forestPath, platform), sorted_files), total=len(sorted_files)):
+            for prediction in predictions:
+                try:
+                    reported_type, old_type, fresh_type = prediction
+                except TypeError:
+
+                    continue
+
                 prediction_count += 1
 
                 confusion_key = (reported_type, fresh_type)
@@ -634,10 +663,11 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0):
     printConfusion(fresh_confusion)
 
 def dispatchCommand(command, options):
+    np.seterr(all='raise')
     if command == 'updateSamples':
         updateSamplePickles(force_update=options.force_update)
     elif command == 'updateFeatures':
-        updateFeatureSets(force_update=options.force_update)
+        updateFeatureSets(force_update=options.force_update, platform=options.platform)
     elif command == 'train':
         try:
             exclude_labels = [int(s) for s in options.exclude_labels.split(',')]
@@ -647,9 +677,10 @@ def dispatchCommand(command, options):
             output_filename=options.output_filename,
             split=options.split,
             exclude_labels=exclude_labels,
-            include_crowd_data=options.include_crowd_data)
+            include_crowd_data=options.include_crowd_data,
+            platform=options.platform)
     elif command == 'test':
-        loadModelAndTestAgainstTSDs(options.model, fraction=options.tsd_sample_fraction)
+        loadModelAndTestAgainstTSDs(options.model, fraction=options.tsd_sample_fraction, platform=options.platform)
     elif command == 'all':
         dispatchCommand('updateSamples', options)
         dispatchCommand('updateFeatures', options)
@@ -662,12 +693,13 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="run a pipeline command")
     parser.add_argument('command', metavar='CMD', type=str)
-    parser.add_argument('-f --force', dest='force_update', action='store_true', default=False)
-    parser.add_argument('-m --model', dest='model', type=str, default='./model.cv')
+    parser.add_argument('-p', '--platform', dest='platform', default='android')
+    parser.add_argument('-f', '--force', dest='force_update', action='store_true', default=False)
+    parser.add_argument('-m', '--model', dest='model', type=str, default='./model.cv')
     parser.add_argument('-o', '--output', dest='output_filename', type=str, default='./model.cv')
     parser.add_argument('--exclude-labels', dest='exclude_labels', type=str, default='9')
     parser.add_argument('--no-split', dest='split', default=True, action='store_false')
-    parser.add_argument('--sample-fraction', dest='tsd_sample_fraction', default=1.0, type=float)
+    parser.add_argument('--sample-fraction', dest='tsd_sample_fraction', default=0.1, type=float)
     parser.add_argument('--include-crowd-data', dest='include_crowd_data', action='store_false', default=True)
     args = parser.parse_args()
     dispatchCommand(args.command, args)

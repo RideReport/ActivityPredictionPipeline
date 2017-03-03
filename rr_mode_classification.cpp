@@ -37,6 +37,10 @@ public:
         deleteRandomForestManager(_manager);
     }
 
+    bool canPredict() {
+        return randomForestManagerCanPredict(_manager);
+    }
+
     py::list classifyFeatures(py::list& features) {
         _checkCanPredict();
         _checkClassCount();
@@ -150,6 +154,7 @@ BOOST_PYTHON_MODULE(PYTHON_MODULE_NAME)
             ))
         .def("classLabels", &RandomForest::classLabels)
         .def("getFeatureCount", &RandomForest::getFeatureCount)
+        .def("canPredict", &RandomForest::canPredict)
         .add_property("feature_count", &RandomForest::getFeatureCount)
         .add_property("desired_signal_duration", &RandomForest::getDesiredSignalDuration)
     ;
