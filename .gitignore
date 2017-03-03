@@ -2,3 +2,7 @@
 *.o
 *.so
 *.pyc
+v/
+
+# default output / temp model
+model.cv

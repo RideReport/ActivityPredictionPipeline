@@ -450,9 +450,6 @@ def updateFeatureSets(force_update=False):
     print "Generated {} rows of features from {}/{} files in {:.1f}s".format(feature_count, len(filenames), len(all_filenames), t.elapsed)
 
 def getFeatureSetsFromAllTrainableTSDs():
-
-    with open('./data/trainable_tsd_pks.txt') as f:
-        pks = [line.strip() for line in f.readlines()]
     filenames = glob.glob('./data/trusted_tsd.*.jsonl')
     pool = Pool()
     return list(tqdm(pool.imap_unordered(getFeatureSetFromTrainableTSDFile, filenames), total=len(filenames)))
@@ -479,7 +476,7 @@ def buildModelFromFeatureSetPickles(output_filename, split, exclude_labels, incl
         print "Loading whitelisted TSDs"
         all_sets += getFeatureSetsFromAllTrainableTSDs()
 
-    filenames = glob.glob('./temp/fsets.*.pickle')
+    filenames = glob.glob('./data/*.fsets.pickle')
     with Timer() as t:
         for filename in filenames:
             with open(filename) as f:
@@ -666,11 +663,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="run a pipeline command")
     parser.add_argument('command', metavar='CMD', type=str)
     parser.add_argument('-f --force', dest='force_update', action='store_true', default=False)
-    parser.add_argument('-m --model', dest='model', type=str, default='./temp/model.cv')
-    parser.add_argument('-o', '--output', dest='output_filename', type=str, default='./temp/model.cv')
+    parser.add_argument('-m --model', dest='model', type=str, default='./model.cv')
+    parser.add_argument('-o', '--output', dest='output_filename', type=str, default='./model.cv')
     parser.add_argument('--exclude-labels', dest='exclude_labels', type=str, default='9')
     parser.add_argument('--no-split', dest='split', default=True, action='store_false')
     parser.add_argument('--sample-fraction', dest='tsd_sample_fraction', default=1.0, type=float)
-    parser.add_argument('--include-crowd-data', dest='include_crowd_data', action='store_true', default=False)
+    parser.add_argument('--include-crowd-data', dest='include_crowd_data', action='store_false', default=True)
     args = parser.parse_args()
     dispatchCommand(args.command, args)
