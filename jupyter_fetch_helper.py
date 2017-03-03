@@ -38,12 +38,12 @@ def fetchResourceInJupyter(varname, url):
 
 def fetchTSDInJupyter(arg):
     url = 'https://ride.report/__tools/inspect/tripsensordata_raw/{}'.format(arg)
-    fetchResourceInJupyter('tsd', url)
+    fetchResourceInJupyter('tsd_dict', url)
 
 def fetchASDInJupyter(arg):
     url = 'https://ride.report/__tools/inspect/androidsensordata_raw/{}'.format(arg)
-    fetchResourceInJupyter('asd', url)
+    fetchResourceInJupyter('asd_dict', url)
 
 def fetchICDInJupyter(arg):
     url = 'https://ride.report/__tools/inspect/iosclassificationdata_raw/{}'.format(arg)
-    fetchResourceInJupyter('icd', url)
+    fetchResourceInJupyter('icd_dict', url)

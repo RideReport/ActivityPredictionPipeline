@@ -101,7 +101,7 @@ class RawSample(object):
 class npReadingsMixin(object):
     @property
     def sampleCount(self):
-        return len(self.npReadings)
+        return self.npReadings.shape[0]
 
     @property
     def minT(self):
@@ -119,15 +119,20 @@ class npReadingsMixin(object):
     def maxSpacing(self):
         return np.max(np.diff(self.npReadings[:,READING_T]))
 
+    @property
+    def minSpacing(self):
+        return np.min(np.diff(self.npReadings[:,READING_T]))
+
 class npSpeedReadingsMixin(object):
     @property
     def averageSpeed(self):
         if self.npSpeedReadings.shape[0] == 0:
             return None
         speeds = self.npSpeedReadings[:,SPEED_S]
-        try:
-            return np.mean(speeds[speeds >= 0])
-        except:
+        good_speeds = speeds[speeds >= 0]
+        if len(good_speeds):
+            return np.mean(good_speeds)
+        else:
             return None
 
 
@@ -220,14 +225,17 @@ class LabeledFeatureSet(object):
         """Generate features based on a continuous sample.
 
         It is OK to do a rolling window here because the test/train split
-        is done when these ciSample objects are created
+        is done on the LabeledFeatureSet level
         """
         try:
             offsetIndex = 0
             while True:
                 offset = offsetIndex * spacing
+
+                # construct sub-samping window of desired duration, plus 10%
+                # for safety
                 minT = ciSample.minT + offset
-                maxT = minT + forest.desired_signal_duration*1.5
+                maxT = minT + forest.desired_signal_duration*1.1
                 readingTimes = ciSample.npReadings[:,READING_T]
                 mask = (readingTimes >= minT) & (readingTimes <= maxT)
 
@@ -368,11 +376,56 @@ class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
     def getFeatures(self, forest):
         return forest.prepareFeaturesFromSignal(readingsFromNPReadings(self.npReadings))
 
+    def describe(self, forest):
+        delta = self.duration - forest.desired_signal_duration
+        notes = []
+        if self.averageSpeed is None:
+            notes.append('Unknown speed')
+        else:
+            notes.append('Speed: {:.1f} m/s == {:.1f} mi/h'.format(self.averageSpeed, self.averageSpeed * 2.23694))
+        notes.append('Sample has {} readings, avg spacing {:.1f}ms'.format(self.sampleCount, (self.duration / self.sampleCount) * 1000.))
+        notes.append('Min spacing: {:.1f}ms'.format(self.minSpacing * 1000.))
+
+        if delta < 0:
+            notes.append('Sample not long enough: need {:.1f}ms more data'.format(-delta * 1000.))
+        else:
+            notes.append('Sample good length: has {:.1f}ms more than needed'.format(delta * 1000.))
+
+        if self.maxSpacing > forest.desired_spacing * 1.1:
+            notes.append('Sample has large gap; max spacing: {:.1f}ms ({:.0%} of desired)'.format(self.maxSpacing * 1000., self.maxSpacing / forest.desired_spacing))
+        elif self.maxSpacing > forest.desired_spacing:
+            notes.append('Sample has OK gaps;   max spacing: {:.1f}ms ({:.0%} of desired)'.format(self.maxSpacing * 1000., self.maxSpacing / forest.desired_spacing))
+        else:
+            notes.append('Sample has good gaps; max spacing: {:.1f}ms ({:.0%} of desired)'.format(self.maxSpacing * 1000., self.maxSpacing / forest.desired_spacing))
+
+        try:
+            features = forest.prepareFeaturesFromSignal(readingsFromNPReadings(self.npReadings))
+            notes.append('Got features: {}'.format(' '.join('{:.1f}'.format(val) for val in features)))
+        except RuntimeError as e:
+            notes.append('Could not generate features: "{}"'.format(e))
+
+        try:
+            confidences = forest.classifySignal(readingsFromNPReadings(self.npReadings))
+            predictions_list = sorted(izip(forest.classLabels(), confidences), key=itemgetter(1), reverse=True)
+            predictions_str = ' '.join('{}={:.1f}'.format(k, v) for k, v in predictions_list)
+            notes.append('Got predictions: {}'.format(predictions_str))
+        except RuntimeError:
+            notes.append('Could not classify: "{}"'.format(e))
+        return notes
+
+
+
 class PreparedTSD(object):
     def __init__(self, tsd_dict):
         self.notes = tsd_dict.get('notes', '')
         self.reportedActivityType = tsd_dict['reported_type']
-        self.events = [TSDEvent(event) for event in tsd_dict['data']]
+        self.skipped_event_count = 0
+        self.events = []
+        for event in tsd_dict['data']:
+            try:
+                self.events.append(TSDEvent(event))
+            except IndexError:
+                self.skipped_event_count += 1
 
 @contextmanager
 def print_exceptions():
@@ -382,6 +435,24 @@ def print_exceptions():
         import traceback
         traceback.print_exc()
         raise
+
+def split_fsets(fsets, seed=None):
+    if seed:
+        random.seed(seed)
+
+    bytype = {}
+    for fset in fsets:
+        bytype.setdefault(fset.reportedActivityType, [])
+        bytype[fset.reportedActivityType].append(fset)
+
+    train_sets = []
+    test_sets = []
+    for ksets in bytype.values():
+        random.shuffle(ksets)
+
+        train_sets += ksets[:len(ksets)/2]
+        test_sets += ksets[len(ksets)/2:]
+    return train_sets, test_sets
 
 def updateContinuousIntervalsPickleFromJSONFile(filename):
     with print_exceptions():
@@ -479,8 +550,10 @@ def getFeatureSetFromTrainableTSDFile(platform, filename):
 
         return LabeledFeatureSet.fromTSDEvents(tsd.reportedActivityType, tsd.events, forest)
 
-def buildModelFromFeatureSetPickles(output_filename, split, exclude_labels, include_crowd_data=False, platform='android'):
+def buildModelFromFeatureSetPickles(output_filename, split, exclude_labels, include_crowd_data=False, platform='android', seed=None):
     all_sets = []
+
+    print "Building model file: {}".format(output_filename)
 
     if include_crowd_data:
         print "Loading whitelisted TSDs"
@@ -493,22 +566,10 @@ def buildModelFromFeatureSetPickles(output_filename, split, exclude_labels, incl
                 sets = pickle.load(f)
                 if len(sets) > 0 and sets[0].reportedActivityType not in exclude_labels:
                     all_sets += sets
-    print "Loaded {} feature sets from {} files in {:.1f}s".format(len(all_sets), len(filenames), t.elapsed)
+    print "Loaded {} labeled feature sets from {} files in {:.1f}s".format(len(all_sets), len(filenames), t.elapsed)
 
     if split:
-        bytype = {}
-        for fset in all_sets:
-            bytype.setdefault(fset.reportedActivityType, [])
-            bytype[fset.reportedActivityType].append(fset)
-
-        train_sets = []
-        test_sets = []
-        for ksets in bytype.values():
-            random.shuffle(ksets)
-
-            train_sets += ksets[:len(ksets)/2]
-            test_sets += ksets[len(ksets)/2:]
-
+        train_sets, test_sets = split_fsets(all_sets, seed=seed)
         builder = ModelBuilder(train_sets)
     else:
         builder = ModelBuilder(all_sets)
@@ -569,30 +630,33 @@ def predictTSDFileWithFilters(forestPath, platform, filename):
             traceback.print_exc()
             return []
 
-        confusion_tuples = []
-        reportedActivityType = tsd.reportedActivityType
-        for event in tsd.events:
-            # skip if original predictions aren't known
-            if event.originalInferredActivityType is None:
-                continue
+        return predictTSDObjectWithFilters(tsd, forest)
 
-            # skip if speed is unknown
-            if event.averageSpeed is None:
-                continue
+def predictTSDObjectWithFilters(tsd, forest):
+    confusion_tuples = []
+    reportedActivityType = tsd.reportedActivityType
+    for event in tsd.events:
+        # skip if original predictions aren't known
+        if event.originalInferredActivityType is None:
+            continue
 
-            # skip if wrong speed for type
-            speed = event.averageSpeed
-            running_slow = (reportedActivityType == 1 and speed < 1.5)
-            bike_or_motor = (reportedActivityType == 2 or reportedActivityType == 3 or reportedActivityType == 5 or reportedActivityType == 6)
-            bike_or_motor_slow = bike_or_motor and speed < 2
-            walking_slow = (reportedActivityType == 4 and speed < 0.3)
-            walking_fast = (reportedActivityType == 4 and speed > 2)
-            if speed < 0 or running_slow or bike_or_motor_slow or walking_fast or walking_slow:
-                continue
+        # skip if speed is unknown
+        if event.averageSpeed is None:
+            continue
 
-            # create new predictions
-            confusion_tuples.append((reportedActivityType, event.originalInferredActivityType, event.getFreshInferredType(forest)))
-        return confusion_tuples
+        # skip if wrong speed for type
+        speed = event.averageSpeed
+        running_slow = (reportedActivityType == 1 and speed < 1.5)
+        bike_or_motor = (reportedActivityType == 2 or reportedActivityType == 3 or reportedActivityType == 5 or reportedActivityType == 6)
+        bike_or_motor_slow = bike_or_motor and speed < 2
+        walking_slow = (reportedActivityType == 4 and speed < 0.3)
+        walking_fast = (reportedActivityType == 4 and speed > 2)
+        if speed < 0 or running_slow or bike_or_motor_slow or walking_fast or walking_slow:
+            continue
+
+        # create new predictions
+        confusion_tuples.append((reportedActivityType, event.originalInferredActivityType, event.getFreshInferredType(forest)))
+    return confusion_tuples
 
 def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android'):
     import glob
@@ -610,9 +674,11 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android'):
         print "model at '{}' Cannot predict!".format(forestPath)
         return
 
+    print "Testing model: {}".format(os.path.abspath(forestPath))
     classLabels = forest.classLabels()
 
     def printConfusion(confusion):
+        print "reported label on left; prediction on top"
         labels = [1, 2, 3, 4, 5, 6, 7]
         print '   {}  TOTAL'.format(' '.join("{: 4}".format(column_title) for column_title in labels))
         for reported_label in labels:
@@ -630,6 +696,7 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android'):
         pool = Pool()
         tsd_files = glob.glob('./data/tsd*.jsonl')
         if fraction < 1.0:
+            print "Sampling TSDs: running predictions on {:.1%} of {} total".format(fraction, len(tsd_files))
             tsd_files = random.sample(tsd_files, int(len(tsd_files)*fraction))
 
         # big files first, for better parallelization
@@ -663,29 +730,33 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android'):
     printConfusion(fresh_confusion)
 
 def dispatchCommand(command, options):
+    if options.model is None:
+        options.model = './model.{}.cv'.format(options.platform)
     np.seterr(all='raise')
+
     if command == 'updateSamples':
         updateSamplePickles(force_update=options.force_update)
     elif command == 'updateFeatures':
         updateFeatureSets(force_update=options.force_update, platform=options.platform)
     elif command == 'train':
+
         try:
             exclude_labels = [int(s) for s in options.exclude_labels.split(',')]
         except:
             exclude_labels = []
         buildModelFromFeatureSetPickles(
-            output_filename=options.output_filename,
+            output_filename=options.model,
             split=options.split,
             exclude_labels=exclude_labels,
             include_crowd_data=options.include_crowd_data,
-            platform=options.platform)
+            platform=options.platform,
+            seed=options.seed)
     elif command == 'test':
         loadModelAndTestAgainstTSDs(options.model, fraction=options.tsd_sample_fraction, platform=options.platform)
     elif command == 'all':
         dispatchCommand('updateSamples', options)
         dispatchCommand('updateFeatures', options)
         dispatchCommand('train', options)
-        dispatchCommand('test', options)
     else:
         raise ValueError("Unknown command: {}".format(command))
 
@@ -693,13 +764,19 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="run a pipeline command")
     parser.add_argument('command', metavar='CMD', type=str)
-    parser.add_argument('-p', '--platform', dest='platform', default='android')
+    parser.add_argument('-p', '--platform', dest='platform', required=True, choices=['ios', 'android'])
     parser.add_argument('-f', '--force', dest='force_update', action='store_true', default=False)
-    parser.add_argument('-m', '--model', dest='model', type=str, default='./model.cv')
-    parser.add_argument('-o', '--output', dest='output_filename', type=str, default='./model.cv')
+    parser.add_argument('-m', '--model', dest='model', metavar="MODEL_FILE", type=str, default=None)
     parser.add_argument('--exclude-labels', dest='exclude_labels', type=str, default='9')
     parser.add_argument('--no-split', dest='split', default=True, action='store_false')
+    parser.add_argument('-s', '--seed', dest='seed', default=None)
     parser.add_argument('--sample-fraction', dest='tsd_sample_fraction', default=0.1, type=float)
     parser.add_argument('--include-crowd-data', dest='include_crowd_data', action='store_false', default=True)
     args = parser.parse_args()
-    dispatchCommand(args.command, args)
+    try:
+        dispatchCommand(args.command, args)
+    except ValueError as e:
+        if str(e).startswith('Unknown command'):
+            print str(e)
+        else:
+            raise

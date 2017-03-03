@@ -87,6 +87,10 @@ public:
         return _sampleSize / (float)_samplingRateHz;
     }
 
+    float getDesiredSpacing() {
+        return 1.f / (float)_samplingRateHz;
+    }
+
     py::list classLabels() {
         _checkCanPredict();
         _checkClassCount();
@@ -157,5 +161,6 @@ BOOST_PYTHON_MODULE(PYTHON_MODULE_NAME)
         .def("canPredict", &RandomForest::canPredict)
         .add_property("feature_count", &RandomForest::getFeatureCount)
         .add_property("desired_signal_duration", &RandomForest::getDesiredSignalDuration)
+        .add_property("desired_spacing", &RandomForest::getDesiredSpacing)
     ;
 }

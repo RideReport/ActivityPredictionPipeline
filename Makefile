@@ -27,12 +27,14 @@ COMPILE_C = $(CC) $(CFLAGS) -o $@ -c -x c $<
 ifeq ($(SNAME), Linux)
 
 all: rr_mode_classification_opencv.so opencv_fft.so utilityadapter.so librrnative.so java/build/libs/java-all.jar
+models: model.android.cv
 
 endif
 
 ifeq ($(SNAME), Darwin)
 
 all: rr_mode_classification_opencv.so rr_mode_classification_apple.so apple_fft.so opencv_fft.so utilityadapter.so librrnative.so java/build/libs/java-all.jar
+models: model.android.cv models.ios.cv
 
 rr_mode_classification_apple.so: rr_mode_classification_apple.oo randomforestmanager.oo fftmanager.oo utility.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
@@ -93,7 +95,14 @@ utility.oo: ActivityPredictor/Utility.cpp ActivityPredictor/Utility.h
 utilityadapter.oo: UtilityAdapter.cpp UtilityAdapter.hpp util.hpp ActivityPredictor/Utility.cpp
 	$(COMPILE)
 
-.PHONY: clean install
+# build
+model.android.cv: data/classification_data.*.jsonl data/trusted_tsd.*.jsonl data/*.ciSamples.pickle data/*.fsets.android.pickle rr_mode_classification_opencv.so
+	python pipeline.py all -p android
+
+model.ios.cv: data/classification_data.*.jsonl data/trusted_tsd.*.jsonl data/*.ciSamples.pickle data/*.fsets.ios.pickle rr_mode_classification_apple.so
+	python pipeline.py all -p ios
+
+.PHONY: clean install models
 
 clean:
 	rm -f *.oo *.o *.so

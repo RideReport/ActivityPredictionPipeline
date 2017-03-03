@@ -4,5 +4,8 @@
 *.pyc
 v/
 
+.ipynb_checkpoints/
+
 # default output / temp model
-model.cv
+model.android.cv
+model.ios.cv
