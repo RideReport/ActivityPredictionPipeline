@@ -419,6 +419,15 @@ class PreparedTSD(object):
     def __init__(self, tsd_dict):
         self.notes = tsd_dict.get('notes', '')
         self.reportedActivityType = tsd_dict['reported_type']
+
+        try:
+            if tsd_dict['client']['name'] == 'RR':
+                self.platform = 'ios'
+            elif tsd_dict['client']['name'] == 'RRA':
+                self.platform = 'android'
+        except (KeyError, TypeError):
+            self.platform = 'unknown'
+
         self.skipped_event_count = 0
         self.events = []
         for event in tsd_dict['data']:

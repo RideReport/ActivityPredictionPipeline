@@ -84,7 +84,9 @@ public:
     }
 
     float getDesiredSignalDuration() {
-        return _sampleSize / (float)_samplingRateHz;
+        // Desired duration is the difference between the time of the first
+        // and the time of the last
+        return (_sampleSize - 1) / (float)_samplingRateHz;
     }
 
     float getDesiredSpacing() {
