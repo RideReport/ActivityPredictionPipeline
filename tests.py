@@ -93,23 +93,6 @@ class FixtureDict(object):
 class FixtureMixin(object):
     data = FixtureDict(os.path.join(os.path.dirname(__file__), 'fixtures'))
 
-class TestResample(unittest.TestCase):
-
-    def test_resample(self):
-        from training_tools import resampleLine
-        line = {}
-        line['rawNormsSeconds'] = np.arange(0, 30, 1, dtype=float)
-        line['rawNorms'] = np.sin((line['rawNormsSeconds'] * 2. / np.pi), dtype=float)
-        originalNorms = line['rawNorms']
-        resampleLine(line, 2.)
-        # Should be spaced half-second apart
-        self.assertEqual(0.5, np.median(np.diff(line['rawNormsSeconds'])))
-
-        # Every other element should be the same as the original elements
-        # (after slicing out the interior, like continuousSecondsIndices()
-        # does)
-        self.assertTrue(np.all(originalNorms[10:20] == line['rawNorms'][0::2]))
-
 class TestInterpolation(unittest.TestCase, FixtureMixin):
     def setUp(self):
         pass
@@ -248,7 +231,7 @@ class TestForest(unittest.TestCase, FixtureMixin):
         self.assertEqual(directConfidences, reversedDirect)
 
     def test_java_vs_python_classify_signal(self):
-        javaProcess = JSONCommandProcess('java -jar mode_classification_wrapper/java/build/libs/java-all.jar "{}"'.format(self.modelFilename), capture_stderr=True)
+        javaProcess = JSONCommandProcess('java -jar java/build/libs/java-all.jar "{}"'.format(self.modelFilename), capture_stderr=True)
         opencvForest = OpenCVRandomForest(self.sampleSize, self.samplingRateHz, self.modelFilename)
         accVec = AccelerationVector3D(self.data['androidAccelerations'])
 
@@ -261,13 +244,13 @@ class TestForest(unittest.TestCase, FixtureMixin):
         self.assertEqual(javaPredictions, opencvPredictions)
 
     def test_tsds_agree(self):
-        javaProcess = JSONCommandProcess('java -jar mode_classification_wrapper/java/build/libs/java-all.jar "{}"'.format(self.modelFilename), capture_stderr=True)
+        javaProcess = JSONCommandProcess('java -jar java/build/libs/java-all.jar "{}"'.format(self.modelFilename), capture_stderr=True)
         opencvForest = OpenCVRandomForest(self.sampleSize, self.samplingRateHz, self.modelFilename)
 
         self._test_tsd_predictions_agree_using_av3(self.data['tsd-3e82d1a8-1d19-46cf-9e66-fa630d6892f8'], javaProcess, opencvForest)
 
     def test_tsds_agree_using_process(self):
-        javaProcess = JSONCommandProcess('java -jar mode_classification_wrapper/java/build/libs/java-all.jar "{}"'.format(self.modelFilename), capture_stderr=True)
+        javaProcess = JSONCommandProcess('java -jar java/build/libs/java-all.jar "{}"'.format(self.modelFilename), capture_stderr=True)
         opencvForest = OpenCVRandomForest(self.sampleSize, self.samplingRateHz, self.modelFilename)
 
         self._test_tsd_predictions_agree_using_process(self.data['tsd-3e82d1a8-1d19-46cf-9e66-fa630d6892f8'], javaProcess, opencvForest)
@@ -306,7 +289,7 @@ class TestEnvironmentForest(TestForest):
     def test_tsds_list(self):
         from tqdm import tqdm
         import glob
-        javaProcess = JSONCommandProcess('java -jar mode_classification_wrapper/java/build/libs/java-all.jar "{}"'.format(self.modelFilename), capture_stderr=True)
+        javaProcess = JSONCommandProcess('java -jar java/build/libs/java-all.jar "{}"'.format(self.modelFilename), capture_stderr=True)
         opencvForest = OpenCVRandomForest(self.sampleSize, self.samplingRateHz, self.modelFilename)
 
         failed = {}
