@@ -1,0 +1,16 @@
+matplotlib==2.0.0
+python-dateutil
+numpy
+scipy
+mpld3
+
+requests
+
+pyOpenSSL
+cryptography
+idna
+certifi
+
+contexttimer
+tqdm
+requests_futures
