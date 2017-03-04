@@ -25,11 +25,29 @@ READING_T = 3
 SPEED_S = 0
 SPEED_T = 1
 
+SAMPLING_RATE_HZ = 20
+SAMPLE_COUNT = 64
+
 class InvalidSampleError(ValueError):
     pass
 
 class IncompatibleFeatureCountError(ValueError):
     pass
+
+def filename_sha256_hexdigest(self, filename, block_size=65536):
+    sha256 = hashlib.sha256()
+    with open(filename, 'rb') as f:
+        for block in iter(lambda: f.read(block_size), b''):
+            sha256.update(block)
+    return sha256.hexdigest()
+
+def ordered_predictions_str(labels, confidences=None):
+    if confidences is not None:
+        predictions_list = sorted(izip(labels, confidences), key=itemgetter(1), reverse=True)
+    else:
+        assert isinstance(labels, dict)
+        predictions_list = sorted(labels.items(), key=itemgetter(1), reverse=True)
+    return ' '.join('{}={:.1f}'.format(k, v) for k, v in predictions_list)
 
 class AccelerationVector3D(object):
     epoch = pytz.utc.localize(datetime.datetime.utcfromtimestamp(0))
@@ -138,12 +156,13 @@ class npSpeedReadingsMixin(object):
 
 class ContinuousIntervalSample(npReadingsMixin, npSpeedReadingsMixin):
 
-    MAX_ALLOWED_SPACING = 1./20. * 1.1 # max number of seconds between readings
+    MAX_ALLOWED_SPACING = 1./float(SAMPLING_RATE_HZ) * 1.1 # max number of seconds between readings
     MAX_INTERVAL_LENGTH = 60. # max number of seconds for entire interval (for train/test splitting)
-    MIN_INTERVAL_LENGTH = 64/20. # minimum length in seconds for a useful interval
+    MIN_INTERVAL_LENGTH = SAMPLE_COUNT/float(SAMPLING_RATE_HZ) # minimum length in seconds for a useful interval
 
     def __init__(self, sample, startIndex, endIndex):
         self.samplePk = sample.pk
+        self.dataId = (sample.pk, startIndex, endIndex)
         self.sampleNotes = sample.notes
         self.reportedActivityType = sample.reportedActivityType
         self.npReadings = sample.npRawReadings[startIndex:endIndex]
@@ -155,10 +174,6 @@ class ContinuousIntervalSample(npReadingsMixin, npSpeedReadingsMixin):
             self.npSpeedReadings = sample.npRawSpeedReadings[(speedTimes >= minT) & (speedTimes <= maxT)]
         else:
             self.npSpeedReadings = np.empty((0, 2))
-
-    def __getstate__(self):
-        keys = ('samplePk', 'sampleNotes', 'reportedActivityType', 'npReadings', 'npSpeedReadings')
-        return { k: v for k, v in self.__dict__.iteritems() if k in keys }
 
     @classmethod
     def makeMany(cls, sample,
@@ -201,21 +216,25 @@ class ContinuousIntervalSample(npReadingsMixin, npSpeedReadingsMixin):
 class LabeledFeatureSet(object):
 
     @classmethod
-    def fromTSDEvents(cls, reportedActivityType, events, forest):
+    def fromTSD(cls, tsd, forest):
         fset = cls()
-        fset.reportedActivityType = reportedActivityType
+        fset.reportedActivityType = tsd.reportedActivityType
         fset.features = []
-        for event in events:
+        indices = []
+        for index, event in enumerate(tsd.events):
             try:
                 fset.features.append(event.getFeatures(forest))
+                indices.append(index)
             except RuntimeError:
                 pass
+        fset.dataId = (tsd.dataHash,) + tuple(indices)
         return fset
 
     @classmethod
     def fromSample(cls, ciSample, forest, spacing):
         fset = cls()
         fset.samplePk = ciSample.samplePk
+        fset.dataId = ciSample.dataId
         fset.reportedActivityType = ciSample.reportedActivityType
         fset.features = list(fset._generateFeatures(ciSample, forest, spacing))
         return fset
@@ -257,6 +276,8 @@ class ModelBuilder(object):
         self.active_var_count = active_var_count
         self.max_tree_count = max_tree_count
         self.epsilon = epsilon
+
+        self.dataId = sum((fset.dataId for fset in feature_sets), ())
 
         self.features = None
         self.labels = None
@@ -336,12 +357,13 @@ class ModelBuilder(object):
         model.save(output_filename)
         print "CV model: {} ({:.4f} MB)".format(output_filename, os.path.getsize(output_filename) / (2.**20))
 
-        return BuiltForest(model=model)
+        return BuiltForest(builder=self, model=model, filename=output_filename)
 
 class BuiltForest(object):
-    def __init__(self, model=None, params={}):
+    def __init__(self, builder=None, model=None, filename=None):
+        self.builder = builder
         self.model = model
-        self.params = params
+        self.filename = filename
 
     def printConfusionMatrix(self, test_feature_sets):
         features, labels = ModelBuilder._convertFeatureSetsToFeaturesAndLabels(test_feature_sets)
@@ -353,6 +375,33 @@ class BuiltForest(object):
             wrongs = ['{}={:2}'.format(int(cls), int(100* predicted_labels[predicted_labels==cls].shape[0]/total)) for cls in np.unique(labels)]
             print "CV Accuracy {}: {:3} {} ({: 6} total)".format(label, int(100*accuracy), ' '.join(wrongs), int(total))
 
+    def tuple_sha256_hexdigest(self, t):
+        sha256 = hashlib.sha256()
+        for value in t:
+            sha256.update(json.dumps(value))
+        return sha256.hexdigest()
+
+    def metadata(self):
+        # TODO: consider keeping longer description of data?
+        # TODO: add pipeline & predictor commit id/desc
+        return
+        return dict(
+            model_metadata_version=1,
+            feature_prep=dict(
+                sampleCount=SAMPLE_COUNT,
+                samplingRateHz=SAMPLING_RATE_HZ
+            ),
+            builder_kwargs=dict(
+                sample_count_multiple=builder.sample_count_multiple,
+                active_var_count=builder.active_var_count,
+                max_tree_count=builder.max_tree_count,
+                epsilon=builder.epsilon
+            ),
+            cv_sha256=filename_sha256_hexdigest(self.filename),
+            data_sha256=self.tuple_sha256_hexdigest(self.builder.dataId)
+        )
+
+
 
 class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
     def __init__(self, event_dict):
@@ -360,6 +409,7 @@ class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
             self.originalInferredActivityType = None
         else:
             old_predictions = { p['activityType']: p['confidence'] for p in event_dict['activityTypePredictions'] }
+            self.originalPredictions = old_predictions
             self.originalInferredActivityType = max(old_predictions.keys(), key=lambda k: old_predictions[k])
 
         self.npReadings = AccelerationVector3D(event_dict['accelerometerAccelerations']).npReadings
@@ -379,6 +429,9 @@ class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
     def describe(self, forest):
         delta = self.duration - forest.desired_signal_duration
         notes = []
+        notes.append('Original inference: {}'.format(self.originalInferredActivityType))
+
+        notes.append('Original predictions: {}'.format(ordered_predictions_str(self.originalPredictions)))
         if self.averageSpeed is None:
             notes.append('Unknown speed')
         else:
@@ -406,9 +459,7 @@ class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
 
         try:
             confidences = forest.classifySignal(readingsFromNPReadings(self.npReadings))
-            predictions_list = sorted(izip(forest.classLabels(), confidences), key=itemgetter(1), reverse=True)
-            predictions_str = ' '.join('{}={:.1f}'.format(k, v) for k, v in predictions_list)
-            notes.append('Got predictions: {}'.format(predictions_str))
+            notes.append('Got predictions: {}'.format(ordered_predictions_str(forest.classLabels(), confidences)))
         except RuntimeError:
             notes.append('Could not classify: "{}"'.format(e))
         return notes
@@ -416,7 +467,9 @@ class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
 
 
 class PreparedTSD(object):
-    def __init__(self, tsd_dict):
+    def __init__(self, tsd_dict, dataHash=None):
+        self.dataHash = None
+        self.trip_pk = tsd_dict['trip_pk']
         self.notes = tsd_dict.get('notes', '')
         self.reportedActivityType = tsd_dict['reported_type']
 
@@ -502,8 +555,8 @@ def updateFeatureSetsPickleFromCiSamplesPickle(platform, filename):
         elif platform == 'ios':
             from rr_mode_classification_apple import RandomForest
 
-        sampleCount = 64
-        samplingRateHz = 20
+        sampleCount = SAMPLE_COUNT
+        samplingRateHz = SAMPLING_RATE_HZ
         forest = RandomForest(sampleCount, samplingRateHz, None)
         with open(filename) as f:
             ciSamples = pickle.load(f)
@@ -553,11 +606,11 @@ def getFeatureSetFromTrainableTSDFile(platform, filename):
         elif platform == 'ios':
             from rr_mode_classification_apple import RandomForest
 
-        forest = RandomForest(64, 20, None)
+        forest = RandomForest(SAMPLE_COUNT, SAMPLING_RATE_HZ, None)
         tsd = loadTSD(filename, force_update=True)
         activityType = tsd.reportedActivityType
 
-        return LabeledFeatureSet.fromTSDEvents(tsd.reportedActivityType, tsd.events, forest)
+        return LabeledFeatureSet.fromTSD(tsd, forest)
 
 def buildModelFromFeatureSetPickles(output_filename, split, exclude_labels, include_crowd_data=False, platform='android', seed=None):
     all_sets = []
@@ -600,8 +653,9 @@ def loadTSD(filename, force_update=False):
 
     fileTime = os.path.getmtime(filename)
     if fileTime > pickleTime or force_update:
+        digest = filename_sha256_hexdigest(filename)
         with open(filename) as tsdF:
-            tsd = PreparedTSD(json.load(tsdF))
+            tsd = PreparedTSD(json.load(tsdF), dataHash=digest)
         with open(pickleFilename, 'wb') as pickleF:
             pickle.dump(tsd, pickleF, pickle.HIGHEST_PROTOCOL)
     else:
@@ -629,7 +683,7 @@ def predictTSDFileWithFilters(forestPath, platform, filename):
         from rr_mode_classification_apple import RandomForest
 
     with print_exceptions():
-        forest = RandomForest(64, 20, forestPath)
+        forest = RandomForest(SAMPLE_COUNT, SAMPLING_RATE_HZ, forestPath)
         classLabels = forest.classLabels()
         try:
             tsd = loadTSD(filename)
@@ -678,7 +732,7 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android'):
     elif platform == 'ios':
         from rr_mode_classification_apple import RandomForest
 
-    forest = RandomForest(64, 20, forestPath)
+    forest = RandomForest(SAMPLE_COUNT, SAMPLING_RATE_HZ, forestPath)
     if not forest.canPredict():
         print "model at '{}' Cannot predict!".format(forestPath)
         return
