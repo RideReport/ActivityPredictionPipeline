@@ -96,11 +96,11 @@ utilityadapter.oo: UtilityAdapter.cpp UtilityAdapter.hpp util.hpp ActivityPredic
 	$(COMPILE)
 
 # build
-model.android.cv: data/classification_data.*.jsonl data/trusted_tsd.*.jsonl data/*.ciSamples.pickle data/*.fsets.android.pickle rr_mode_classification_opencv.so
-	python pipeline.py all -p android
+model.android.cv: data/classification_data.*.jsonl data/*.ciSamples.pickle data/*.fsets.android.pickle rr_mode_classification_opencv.so
+	python pipeline.py all -p android --no-split
 
-model.ios.cv: data/classification_data.*.jsonl data/trusted_tsd.*.jsonl data/*.ciSamples.pickle data/*.fsets.ios.pickle rr_mode_classification_apple.so
-	python pipeline.py all -p ios
+model.ios.cv: data/classification_data.*.jsonl data/*.ciSamples.pickle data/*.fsets.ios.pickle rr_mode_classification_apple.so
+	python pipeline.py all -p ios --no-split
 
 .PHONY: clean install models
 
