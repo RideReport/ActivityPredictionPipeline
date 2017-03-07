@@ -1,0 +1,5 @@
+#!/bin/bash
+
+pip install pip-tools
+pip-compile requirements.in -o requirements.txt
+pip-sync requirements.txt
