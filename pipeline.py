@@ -41,8 +41,6 @@ class IncompatibleFeatureCountError(ValueError):
 class IncompatibleConfigurationError(ValueError):
     pass
 
-def default_forest_config_str():
-    return json.dumps({ 'sampling': { 'sample_count': 64, 'sampling_rate_hz': 21 }})
 
 def sha256_sorted_json(thing):
     return hashlib.sha256(json.dumps(thing, sort_keys=True)).hexdigest()
@@ -264,6 +262,7 @@ class LabeledFeatureSet(object):
         """
         try:
             offsetIndex = 0
+            previousStartIndex = -1
             while True:
                 offset = offsetIndex * spacing
 
@@ -273,14 +272,16 @@ class LabeledFeatureSet(object):
                 maxT = minT + forest.desired_signal_duration*1.1
                 readingTimes = ciSample.npReadings[:,READING_T]
                 mask = (readingTimes >= minT) & (readingTimes <= maxT)
+                startIndex = np.argmax(mask)
 
-                # proceed to next if we are gonna be double-sampling
+                if startIndex != previousStartIndex:
+                    # convert to dict because that's what C++ wrapper expects
+                    readings = readingsFromNPReadings(ciSample.npReadings[mask])
 
-                # convert to dict because that's what C++ wrapper expects
-                readings = readingsFromNPReadings(ciSample.npReadings[mask])
+                    yield forest.prepareFeaturesFromSignal(readings)
 
-                yield forest.prepareFeaturesFromSignal(readings)
                 offsetIndex += 1
+                previousStartIndex = startIndex
         except RuntimeError as e:
             if 'probably not enough data' in str(e):
                 pass
@@ -626,7 +627,7 @@ def updateFeatureSetsPickleFromCiSamplesPickle(platform, forestConfigStr, filena
             pickle.dump(fset_list, f, pickle.HIGHEST_PROTOCOL)
         return sum(len(fset.features) for fset in fset_list)
 
-def updateFeatureSets(force_update=False, platform='android', config=None):
+def updateFeatureSets(force_update=False, platform='android', config=''):
     from multiprocessing import Pool
     import glob
     import pickle
@@ -634,9 +635,7 @@ def updateFeatureSets(force_update=False, platform='android', config=None):
     pool = Pool()
 
     print "Updating data/*.fsets.{}.pickle ...".format(platform)
-
-    if config is None:
-        config = default_forest_config_str()
+    print "Using forest config: {}".format(config)
 
     all_filenames = glob.glob('./data/*.ciSamples.pickle')
     filenames = [fname for fname in all_filenames if force_update or derivativeIsOld(fname, '{}.fsets.{}.pickle'.format('{}', platform))]
@@ -647,11 +646,9 @@ def updateFeatureSets(force_update=False, platform='android', config=None):
 
     print "Generated {} rows of features from {}/{} files in {:.1f}s".format(overall_feature_count, len(filenames), len(all_filenames), t.elapsed)
 
-def getFeatureSetsFromAllTrainableTSDs(platform, config=None):
+def getFeatureSetsFromAllTrainableTSDs(platform, config=''):
     filenames = glob.glob('./data/trusted_tsd.*.jsonl')
     pool = Pool()
-    if config is None:
-        config = default_forest_config_str()
     return list(tqdm(pool.imap_unordered(partial(getFeatureSetFromTrainableTSDFile, platform, config), filenames), total=len(filenames)))
 
 def getReportedActivityTypeWithOverrides(tsd):
@@ -717,6 +714,9 @@ def buildModelFromFeatureSetPickles(output_filename, split, exclude_labels, incl
     with open(briefdata_filename, 'w') as f:
         f.write(json.dumps(data, indent=2))
     print "Saved brief metadata to {}".format(briefdata_filename)
+
+    print "Sampling parameters:"
+    print json.dumps(data['sampling'], indent=2)
 
 
 def loadTSD(filename, force_update=False):
@@ -797,7 +797,7 @@ def predictTSDObjectWithFilters(tsd, forest):
         confusion_tuples.append((reportedActivityType, event.originalInferredActivityType, event.getFreshInferredType(forest)))
     return confusion_tuples
 
-def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android', config=None):
+def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android', config=''):
     import glob
     import random
     import os
@@ -807,9 +807,6 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android', co
         from rr_mode_classification_opencv import RandomForest
     elif platform == 'ios':
         from rr_mode_classification_apple import RandomForest
-
-    if config is None:
-        config = default_forest_config_str()
 
     forest = RandomForest(config)
     if not forest.canPredict():
@@ -876,10 +873,12 @@ def dispatchCommand(command, options):
         options.model = './model.{}.cv'.format(options.platform)
     np.seterr(all='raise')
 
+    config = json.dumps({ 'sampling': { 'sample_count': options.sample_count, 'sampling_rate_hz': options.sampling_rate_hz }})
+
     if command == 'updateSamples':
         updateSamplePickles(force_update=options.force_update)
     elif command == 'updateFeatures':
-        updateFeatureSets(force_update=options.force_update, platform=options.platform)
+        updateFeatureSets(force_update=options.force_update, platform=options.platform, config=config)
     elif command == 'train':
 
         try:
@@ -894,7 +893,7 @@ def dispatchCommand(command, options):
             platform=options.platform,
             seed=options.seed)
     elif command == 'test':
-        loadModelAndTestAgainstTSDs(options.model, fraction=options.tsd_sample_fraction, platform=options.platform)
+        loadModelAndTestAgainstTSDs(options.model, fraction=options.tsd_sample_fraction, platform=options.platform, config=config)
     elif command == 'all':
         dispatchCommand('updateSamples', options)
         dispatchCommand('updateFeatures', options)
@@ -913,6 +912,8 @@ if __name__ == '__main__':
     parser.add_argument('--no-split', dest='split', default=True, action='store_false')
     parser.add_argument('-s', '--seed', dest='seed', default=None)
     parser.add_argument('--sample-fraction', dest='tsd_sample_fraction', default=0.1, type=float)
+    parser.add_argument('--sample-count', dest='sample_count', default=64, type=int)
+    parser.add_argument('--sampling-rate-hz', dest='sampling_rate_hz', default=21., type=float)
     parser.add_argument('--include-crowd-data', dest='include_crowd_data', action='store_false', default=True)
     args = parser.parse_args()
     try:
