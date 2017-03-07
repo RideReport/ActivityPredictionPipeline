@@ -38,6 +38,12 @@ class InvalidSampleError(ValueError):
 class IncompatibleFeatureCountError(ValueError):
     pass
 
+class IncompatibleConfigurationError(ValueError):
+    pass
+
+def default_forest_config_str():
+    return json.dumps({ 'sampling': { 'sample_count': 64, 'sampling_rate_hz': 21 }})
+
 def sha256_sorted_json(thing):
     return hashlib.sha256(json.dumps(thing, sort_keys=True)).hexdigest()
 
@@ -239,12 +245,14 @@ class LabeledFeatureSet(object):
         return fset
 
     @classmethod
-    def fromSample(cls, ciSample, forest, spacing):
+    def fromSample(cls, ciSample, forest, forestConfigStr, rolling_window_spacing):
         fset = cls()
         fset.samplePk = ciSample.samplePk
         fset.dataId = copy(ciSample.dataId)
         fset.reportedActivityType = ciSample.reportedActivityType
-        fset.features = list(fset._generateFeatures(ciSample, forest, spacing))
+        fset.features = list(fset._generateFeatures(ciSample, forest, rolling_window_spacing))
+        fset.forestConfigStr = forestConfigStr
+        fset.forestConfigHash = sha256_sorted_json(json.loads(forestConfigStr))
         return fset
 
     @classmethod
@@ -265,6 +273,8 @@ class LabeledFeatureSet(object):
                 maxT = minT + forest.desired_signal_duration*1.1
                 readingTimes = ciSample.npReadings[:,READING_T]
                 mask = (readingTimes >= minT) & (readingTimes <= maxT)
+
+                # proceed to next if we are gonna be double-sampling
 
                 # convert to dict because that's what C++ wrapper expects
                 readings = readingsFromNPReadings(ciSample.npReadings[mask])
@@ -287,6 +297,12 @@ class ModelBuilder(object):
 
         self.dataId = sorted([fset.dataId for fset in feature_sets], key=sha256_sorted_json)
 
+        configHashes = set(fset.forestConfigHash for fset in feature_sets)
+        if len(configHashes) != 1:
+            raise IncompatibleConfigurationError(repr(configHashes))
+        self.forestConfigStr = next(fset.forestConfigStr for fset in feature_sets)
+        self.forestConfigHash = configHashes.pop()
+
         self.features = None
         self.labels = None
         self._appendFeaturesAndLabels(*self._convertFeatureSetsToFeaturesAndLabels(feature_sets))
@@ -299,9 +315,9 @@ class ModelBuilder(object):
                     yield len(feature_row)
         feature_counts = set(gen_feature_counts(fset_list))
         if len(feature_counts) > 1:
-            print feature_counts
             raise IncompatibleFeatureCountError()
         feature_count = feature_counts.pop()
+
 
         all_features = np.array(sum((fset.features for fset in fset_list), []), dtype=np.float32)
         all_labels = np.empty(len(all_features), dtype=np.int32)
@@ -394,15 +410,13 @@ class BuiltForest(object):
         return sha256.hexdigest()
 
     def metadata(self, platform=None, split=None):
-        # TODO: consider keeping longer description of data?
-        # TODO: add pipeline & predictor commit id/desc
         thisRepo = git.Repo(os.path.abspath(os.path.dirname(__file__)), search_parent_directories=True)
         predictorRepo = git.Repo(os.path.abspath(os.path.join(os.path.dirname(__file__), 'ActivityPredictor')), search_parent_directories=True)
-        return dict(
+        data = dict(
             model_metadata_version=1,
-            sampling=dict(
-                sample_count=SAMPLE_COUNT,
-                sampling_rate_hz=SAMPLING_RATE_HZ,
+            features=dict(
+                config_sha256=self.builder.forestConfigHash,
+                count=len(self.builder.labels),
             ),
             builder=dict(
                 sample_count_multiple=self.builder.sample_count_multiple,
@@ -424,10 +438,21 @@ class BuiltForest(object):
                 predictor_is_dirty=predictorRepo.is_dirty(),
             ),
             confusion=dict(
+                matrix_is_oob=split,
                 matrix_str=self.matrix,
                 matrix_features_id=self.matrix_features_dataId,
             )
         )
+
+        # merge forest configuration used for features into metadata
+        forestConfig = json.loads(self.builder.forestConfigStr)
+        for key in forestConfig:
+            if isinstance(forestConfig[key], dict):
+                data.setdefault(key, {})
+                data[key].update(forestConfig[key])
+            else:
+                data[key] = forestConfig[key]
+        return data
 
     def metadata_brief(self, platform=None, split=None):
         data = self.metadata(platform=platform, split=split)
@@ -581,29 +606,27 @@ def updateSamplePickles(force_update=False):
             overall_sample_count += sample_count
     print "Completed {} samples from {}/{} files in {:.1f}s".format(overall_sample_count, len(filenames), len(all_filenames), t.elapsed)
 
-def updateFeatureSetsPickleFromCiSamplesPickle(platform, filename):
+def updateFeatureSetsPickleFromCiSamplesPickle(platform, forestConfigStr, filename):
     with print_exceptions():
         if platform == 'android':
             from rr_mode_classification_opencv import RandomForest
         elif platform == 'ios':
             from rr_mode_classification_apple import RandomForest
 
-        sampleCount = SAMPLE_COUNT
-        samplingRateHz = SAMPLING_RATE_HZ
-        forest = RandomForest(sampleCount, samplingRateHz, None)
+        forest = RandomForest(forestConfigStr)
         with open(filename) as f:
             ciSamples = pickle.load(f)
 
         fset_list = []
         for ciSample in ciSamples:
-            fset = LabeledFeatureSet.fromSample(ciSample, forest, 1./samplingRateHz)
+            fset = LabeledFeatureSet.fromSample(ciSample, forest, forestConfigStr, forest.desired_spacing)
             fset_list.append(fset)
 
         with open('{}.fsets.{}.pickle'.format(filename, platform), 'wb') as f:
             pickle.dump(fset_list, f, pickle.HIGHEST_PROTOCOL)
         return sum(len(fset.features) for fset in fset_list)
 
-def updateFeatureSets(force_update=False, platform='android'):
+def updateFeatureSets(force_update=False, platform='android', config=None):
     from multiprocessing import Pool
     import glob
     import pickle
@@ -612,19 +635,24 @@ def updateFeatureSets(force_update=False, platform='android'):
 
     print "Updating data/*.fsets.{}.pickle ...".format(platform)
 
+    if config is None:
+        config = default_forest_config_str()
+
     all_filenames = glob.glob('./data/*.ciSamples.pickle')
     filenames = [fname for fname in all_filenames if force_update or derivativeIsOld(fname, '{}.fsets.{}.pickle'.format('{}', platform))]
     overall_feature_count = 0
     with Timer() as t:
-        for feature_count in tqdm(pool.imap_unordered(partial(updateFeatureSetsPickleFromCiSamplesPickle, platform), filenames), total=len(filenames)):
+        for feature_count in tqdm(pool.imap_unordered(partial(updateFeatureSetsPickleFromCiSamplesPickle, platform, config), filenames), total=len(filenames)):
             overall_feature_count += feature_count
 
     print "Generated {} rows of features from {}/{} files in {:.1f}s".format(overall_feature_count, len(filenames), len(all_filenames), t.elapsed)
 
-def getFeatureSetsFromAllTrainableTSDs(platform):
+def getFeatureSetsFromAllTrainableTSDs(platform, config=None):
     filenames = glob.glob('./data/trusted_tsd.*.jsonl')
     pool = Pool()
-    return list(tqdm(pool.imap_unordered(partial(getFeatureSetFromTrainableTSDFile, platform), filenames), total=len(filenames)))
+    if config is None:
+        config = default_forest_config_str()
+    return list(tqdm(pool.imap_unordered(partial(getFeatureSetFromTrainableTSDFile, platform, config), filenames), total=len(filenames)))
 
 def getReportedActivityTypeWithOverrides(tsd):
     if tsd.reportedActivityType == 4 and 'run' in tsd.notes:
@@ -632,14 +660,14 @@ def getReportedActivityTypeWithOverrides(tsd):
         return 1
     return tsd.reportedActivityType
 
-def getFeatureSetFromTrainableTSDFile(platform, filename):
+def getFeatureSetFromTrainableTSDFile(platform, forestConfigStr, filename):
     with print_exceptions():
         if platform == 'android':
             from rr_mode_classification_opencv import RandomForest
         elif platform == 'ios':
             from rr_mode_classification_apple import RandomForest
 
-        forest = RandomForest(SAMPLE_COUNT, SAMPLING_RATE_HZ, None)
+        forest = RandomForest(forestConfigStr)
         tsd = loadTSD(filename, force_update=True)
         activityType = tsd.reportedActivityType
 
@@ -724,14 +752,14 @@ def getFeaturesAndLabelsFromTSD(tsd, forest):
 
     return np.array(features, dtype=np.float32), np.array(labels, dtype=np.int32)
 
-def predictTSDFileWithFilters(forestPath, platform, filename):
+def predictTSDFileWithFilters(forestPath, platform, forestConfigStr, filename):
     if platform == 'android':
         from rr_mode_classification_opencv import RandomForest
     elif platform == 'ios':
         from rr_mode_classification_apple import RandomForest
 
     with print_exceptions():
-        forest = RandomForest(SAMPLE_COUNT, SAMPLING_RATE_HZ, forestPath)
+        forest = RandomForest(forestConfigStr)
         classLabels = forest.classLabels()
         try:
             tsd = loadTSD(filename)
@@ -769,7 +797,7 @@ def predictTSDObjectWithFilters(tsd, forest):
         confusion_tuples.append((reportedActivityType, event.originalInferredActivityType, event.getFreshInferredType(forest)))
     return confusion_tuples
 
-def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android'):
+def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android', config=None):
     import glob
     import random
     import os
@@ -780,7 +808,10 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android'):
     elif platform == 'ios':
         from rr_mode_classification_apple import RandomForest
 
-    forest = RandomForest(SAMPLE_COUNT, SAMPLING_RATE_HZ, forestPath)
+    if config is None:
+        config = default_forest_config_str()
+
+    forest = RandomForest(config)
     if not forest.canPredict():
         print "model at '{}' Cannot predict!".format(forestPath)
         return
@@ -814,7 +845,7 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android'):
         sorted_files = sorted(tsd_files, key=lambda filename: os.path.getsize(filename), reverse=True)
 
         prediction_count = 0
-        for predictions in tqdm(pool.imap_unordered(partial(predictTSDFileWithFilters, forestPath, platform), sorted_files), total=len(sorted_files)):
+        for predictions in tqdm(pool.imap_unordered(partial(predictTSDFileWithFilters, forestPath, platform, config), sorted_files), total=len(sorted_files)):
             for prediction in predictions:
                 try:
                     reported_type, old_type, fresh_type = prediction
