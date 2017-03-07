@@ -328,6 +328,7 @@ class TestEnvironmentForest(TestForest):
     def setUp(self):
         super(TestEnvironmentForest, self).setUp()
         self.modelFilename = os.getenv('TEST_MODEL_FILE')
+        self.configFilename = '{}.json'.format(os.getenv('TEST_MODEL_FILE'))
 
     @unittest.skipIf(os.getenv('TEST_TSD_GLOB') is None, "Run with TEST_MODEL_FILE=/path/to/forest.cv TEST_TSD_GLOB='data/*.tsd.json' to test against TSDs")
     def test_tsds_list(self):
@@ -354,12 +355,12 @@ class TestEnvironmentForest(TestForest):
                         # print "test_tsds_list: finished tsd for '{}' in {: 4.1f}s".format(tsd_filename, t.elapsed)
                     except Exception as e:
                         failed[tsd_filename] = repr(e)
-                        # print "test_tsds_list: failed tsd '{}': {}".format(tsd_filename, repr(e))
+                        print "test_tsds_list: failed tsd '{}': {}".format(tsd_filename, repr(e))
 
         print "test_tsds_list: {} good, {} bad".format(len(succeeded), len(failed))
         exceptions = {}
         for filename, exc_str in failed.iteritems():
-            exceptions[exc_str].setdefault([])
+            exceptions.setdefault(exc_str, [])
             exceptions[exc_str].append(filename)
 
         for exc_str, names in exceptions.iteritems():
