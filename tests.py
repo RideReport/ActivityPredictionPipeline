@@ -182,6 +182,21 @@ class TestInterpolation(unittest.TestCase, FixtureMixin):
             print "c : {}".format(cInterpolated)
             raise
 
+    def test_interpolate_small(self):
+        utilityAdapter = UtilityAdapter()
+        seconds = [1, 2, 3, 4, 5]
+        norms = [1, 0, -.6, 0.2, 0.7]
+        expected_result = [1.0, 0.4993303418159485, 0.0, -0.4479910731315613, -0.6000000238418579, -0.2823660969734192, 0.20000000298023224]
+        result = utilityAdapter.interpolateSplineRegular(seconds, norms, 0.5, 7)
+
+        try:
+            for computed, expected in izip(result, expected_result):
+                self.assertAlmostEqual(computed, expected, delta=5e-6)
+        except AssertionError:
+            print "expected: {}".format(expected_result)
+            print "computed: {}".format(result)
+
+
 class TestForest(unittest.TestCase, FixtureMixin):
 
     def setUp(self):
