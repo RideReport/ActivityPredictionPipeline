@@ -13,6 +13,8 @@ cycler==0.10.0            # via matplotlib
 enum34==1.1.6             # via cryptography
 functools32==3.2.3.post2  # via matplotlib
 futures==3.0.5            # via requests-futures
+gitdb2==2.0.0             # via gitpython
+gitpython==2.1.1
 idna==2.2
 ipaddress==1.0.18         # via cryptography
 matplotlib==2.0.0
@@ -29,6 +31,7 @@ requests-futures==0.9.7
 requests==2.13.0
 scipy==0.17.0
 six==1.10.0               # via cryptography, cycler, matplotlib, packaging, pyopenssl, python-dateutil, setuptools
+smmap2==2.0.1             # via gitdb2
 subprocess32==3.2.7       # via matplotlib
 tqdm==4.11.2
 

@@ -36,7 +36,7 @@ ifeq ($(SNAME), Darwin)
 all: rr_mode_classification_opencv.so rr_mode_classification_apple.so apple_fft.so opencv_fft.so utilityadapter.so librrnative.so java/build/libs/java-all.jar
 models: model.android.cv models.ios.cv
 
-rr_mode_classification_apple.so: rr_mode_classification_apple.oo randomforestmanager.oo fftmanager.oo utility.oo
+rr_mode_classification_apple.so: rr_mode_classification_apple.oo randomforestmanager.oo fftmanager.oo utility.oo jsoncpp.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
 apple_fft.so: apple_fft.oo fftmanager.oo
@@ -47,7 +47,7 @@ endif
 java/build/libs/java-all.jar: java/src/main/java/*.java
 	cd java && gradle
 
-rr_mode_classification_opencv.so: rr_mode_classification_opencv.oo randomforestmanager.oo fftmanager_opencv.oo utility.oo
+rr_mode_classification_opencv.so: rr_mode_classification_opencv.oo randomforestmanager.oo fftmanager_opencv.oo utility.oo jsoncpp.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
 fftw_fft.so: fftw_fft.oo fftmanager_fftw.oo
@@ -56,10 +56,10 @@ fftw_fft.so: fftw_fft.oo fftmanager_fftw.oo
 opencv_fft.so: opencv_fft.oo fftmanager_opencv.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
-utilityadapter.so: utilityadapter.oo
+utilityadapter.so: utilityadapter.oo jsoncpp.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
-librrnative.so: randomforestmanager.oo fftmanager_opencv.oo utility.oo
+librrnative.so: randomforestmanager.oo fftmanager_opencv.oo utility.oo jsoncpp.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
 
 rr_mode_classification_apple.oo: rr_mode_classification.cpp ActivityPredictor/RandomForestManager.h
@@ -90,6 +90,9 @@ opencv_fft.oo: OpenCVFFTPythonAdapter.cpp OpenCVFFTPythonAdapter.hpp util.hpp Ac
 	$(COMPILE)
 
 utility.oo: ActivityPredictor/Utility.cpp ActivityPredictor/Utility.h
+	$(COMPILE)
+
+jsoncpp.oo: ActivityPredictor/jsoncpp.cpp ActivityPredictor/json/json.h
 	$(COMPILE)
 
 utilityadapter.oo: UtilityAdapter.cpp UtilityAdapter.hpp util.hpp ActivityPredictor/Utility.cpp

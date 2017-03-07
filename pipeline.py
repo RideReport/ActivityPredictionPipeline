@@ -4,12 +4,16 @@ import datetime
 import json
 import math
 import dateutil.parser
+import git
 import os
 import pickle
 import random
+import hashlib
+from copy import copy
 from itertools import izip
 from contexttimer import Timer
 from functools import partial
+
 
 from multiprocessing import Pool
 from tqdm import tqdm
@@ -25,7 +29,7 @@ READING_T = 3
 SPEED_S = 0
 SPEED_T = 1
 
-SAMPLING_RATE_HZ = 20
+SAMPLING_RATE_HZ = 21
 SAMPLE_COUNT = 64
 
 class InvalidSampleError(ValueError):
@@ -34,7 +38,10 @@ class InvalidSampleError(ValueError):
 class IncompatibleFeatureCountError(ValueError):
     pass
 
-def filename_sha256_hexdigest(self, filename, block_size=65536):
+def sha256_sorted_json(thing):
+    return hashlib.sha256(json.dumps(thing, sort_keys=True)).hexdigest()
+
+def filename_sha256_hexdigest(filename, block_size=65536):
     sha256 = hashlib.sha256()
     with open(filename, 'rb') as f:
         for block in iter(lambda: f.read(block_size), b''):
@@ -162,7 +169,7 @@ class ContinuousIntervalSample(npReadingsMixin, npSpeedReadingsMixin):
 
     def __init__(self, sample, startIndex, endIndex):
         self.samplePk = sample.pk
-        self.dataId = (sample.pk, startIndex, endIndex)
+        self.dataId = { 'type': 'ciSample', 'pk': sample.pk, 'startIndex': startIndex, 'endIndex': endIndex }
         self.sampleNotes = sample.notes
         self.reportedActivityType = sample.reportedActivityType
         self.npReadings = sample.npRawReadings[startIndex:endIndex]
@@ -227,14 +234,15 @@ class LabeledFeatureSet(object):
                 indices.append(index)
             except RuntimeError:
                 pass
-        fset.dataId = (tsd.dataHash,) + tuple(indices)
+        fset.dataId = copy(tsd.dataId)
+        fset.dataId['indices'] = indices
         return fset
 
     @classmethod
     def fromSample(cls, ciSample, forest, spacing):
         fset = cls()
         fset.samplePk = ciSample.samplePk
-        fset.dataId = ciSample.dataId
+        fset.dataId = copy(ciSample.dataId)
         fset.reportedActivityType = ciSample.reportedActivityType
         fset.features = list(fset._generateFeatures(ciSample, forest, spacing))
         return fset
@@ -277,7 +285,7 @@ class ModelBuilder(object):
         self.max_tree_count = max_tree_count
         self.epsilon = epsilon
 
-        self.dataId = sum((fset.dataId for fset in feature_sets), ())
+        self.dataId = sorted([fset.dataId for fset in feature_sets], key=sha256_sorted_json)
 
         self.features = None
         self.labels = None
@@ -365,15 +373,19 @@ class BuiltForest(object):
         self.model = model
         self.filename = filename
 
-    def printConfusionMatrix(self, test_feature_sets):
+    def getConfusionMatrixStr(self, test_feature_sets):
         features, labels = ModelBuilder._convertFeatureSetsToFeaturesAndLabels(test_feature_sets)
 
+        lines = []
         for label in np.unique(labels):
             junk, predicted_labels = self.model.predict(features[labels == label])
             total = float(predicted_labels.shape[0])
             accuracy = predicted_labels[predicted_labels == label].shape[0] / total
             wrongs = ['{}={:2}'.format(int(cls), int(100* predicted_labels[predicted_labels==cls].shape[0]/total)) for cls in np.unique(labels)]
-            print "CV Accuracy {}: {:3} {} ({: 6} total)".format(label, int(100*accuracy), ' '.join(wrongs), int(total))
+            lines.append("CV Accuracy {}: {:3} {} ({: 6} total)".format(label, int(100*accuracy), ' '.join(wrongs), int(total)))
+        self.matrix = '\n'.join(lines)
+        self.matrix_features_dataId = sorted([fset.dataId for fset in test_feature_sets], key=sha256_sorted_json)
+        return self.matrix
 
     def tuple_sha256_hexdigest(self, t):
         sha256 = hashlib.sha256()
@@ -381,26 +393,47 @@ class BuiltForest(object):
             sha256.update(json.dumps(value))
         return sha256.hexdigest()
 
-    def metadata(self):
+    def metadata(self, platform=None, split=None):
         # TODO: consider keeping longer description of data?
         # TODO: add pipeline & predictor commit id/desc
-        return
+        thisRepo = git.Repo(os.path.abspath(os.path.dirname(__file__)), search_parent_directories=True)
+        predictorRepo = git.Repo(os.path.abspath(os.path.join(os.path.dirname(__file__), 'ActivityPredictor')), search_parent_directories=True)
         return dict(
             model_metadata_version=1,
-            feature_prep=dict(
-                sampleCount=SAMPLE_COUNT,
-                samplingRateHz=SAMPLING_RATE_HZ
+            sampling=dict(
+                sample_count=SAMPLE_COUNT,
+                sampling_rate_hz=SAMPLING_RATE_HZ,
             ),
-            builder_kwargs=dict(
-                sample_count_multiple=builder.sample_count_multiple,
-                active_var_count=builder.active_var_count,
-                max_tree_count=builder.max_tree_count,
-                epsilon=builder.epsilon
+            builder=dict(
+                sample_count_multiple=self.builder.sample_count_multiple,
+                active_var_count=self.builder.active_var_count,
+                max_tree_count=self.builder.max_tree_count,
+                epsilon=self.builder.epsilon,
             ),
             cv_sha256=filename_sha256_hexdigest(self.filename),
-            data_sha256=self.tuple_sha256_hexdigest(self.builder.dataId)
+            data=dict(
+                sha256=sha256_sorted_json(self.builder.dataId),
+                id=self.builder.dataId,
+                split=split,
+                platform=platform,
+            ),
+            code=dict(
+                pipeline_commit_sha=thisRepo.head.object.hexsha,
+                pipeline_is_dirty=thisRepo.is_dirty(),
+                predictor_commit_sha=predictorRepo.head.object.hexsha,
+                predictor_is_dirty=predictorRepo.is_dirty(),
+            ),
+            confusion=dict(
+                matrix_str=self.matrix,
+                matrix_features_id=self.matrix_features_dataId,
+            )
         )
 
+    def metadata_brief(self, platform=None, split=None):
+        data = self.metadata(platform=platform, split=split)
+        del data['data']['id']
+        del data['confusion']['matrix_features_id']
+        return data
 
 
 class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
@@ -468,7 +501,7 @@ class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
 
 class PreparedTSD(object):
     def __init__(self, tsd_dict, dataHash=None):
-        self.dataHash = None
+        self.dataId = { 'type': 'tsd', 'trip_pk': tsd_dict['trip_pk'], 'modified': tsd_dict['modified'] }
         self.trip_pk = tsd_dict['trip_pk']
         self.notes = tsd_dict.get('notes', '')
         self.reportedActivityType = tsd_dict['reported_type']
@@ -639,9 +672,24 @@ def buildModelFromFeatureSetPickles(output_filename, split, exclude_labels, incl
     builtforest = builder.build(output_filename=output_filename)
 
     if split:
-        builtforest.printConfusionMatrix(test_sets)
+        print "Confusion matrix for TEST DATA"
+        print builtforest.getConfusionMatrixStr(test_sets)
     else:
-        print "Cannot print confusion matrix without splitting"
+        print "Confusion matrix for TRAINING DATA (no test data)"
+        print builtforest.getConfusionMatrixStr(all_sets)
+
+    fulldata_filename = '{}.full.json'.format(output_filename)
+    data = builtforest.metadata(split=split, platform=platform)
+    with open(fulldata_filename, 'w') as f:
+        f.write(json.dumps(data, indent=2))
+    print "Saved full metadata to {}".format(fulldata_filename)
+
+    briefdata_filename = '{}.json'.format(output_filename)
+    data = builtforest.metadata_brief(split=split, platform=platform)
+    with open(briefdata_filename, 'w') as f:
+        f.write(json.dumps(data, indent=2))
+    print "Saved brief metadata to {}".format(briefdata_filename)
+
 
 def loadTSD(filename, force_update=False):
 

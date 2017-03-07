@@ -24,7 +24,11 @@ import timber.log.Timber;
 public class RandomForestAdapterJNA implements RandomForestAdapter {
     public static class RFManagerPtr extends PointerType {}
 
-    private static native RFManagerPtr createRandomForestManager(int sampleCount, int samplingRateHz, String pathToModelFile);
+    private static native RFManagerPtr createRandomForestManagerFromFiles(String pathToJson, String pathToModelFile);
+    private static native boolean randomForestLoadModel(RFManagerPtr manager);
+    private static native float randomForestGetDesiredDuration(RFManagerPtr manager);
+    private static native float randomForestGetDesiredSpacing(RFManagerPtr manager);
+
     private static native int randomForestGetClassCount(RFManagerPtr manager);
     private static native void randomForestGetClassLabels(RFManagerPtr manager, int[] labels, int labelCount);
     private static native boolean randomForestClassifyAccelerometerSignal(RFManagerPtr manager, AccelerometerReading.ByReference signal, int readingCount, float[] confidences, int n_classes);
@@ -47,18 +51,25 @@ public class RandomForestAdapterJNA implements RandomForestAdapter {
     private RFManagerPtr _manager;
     private int _classCount;
     private int[] _classLabels;
+    private boolean _triedToLoadModel;
 
-    public RandomForestAdapterJNA(int sampleCount, int samplingRateHz, String filename) throws FileNotFoundException {
-        _manager = createRandomForestManager(sampleCount, samplingRateHz, filename);
-        Timber.d("Getting class count");
-        _classCount = randomForestGetClassCount(_manager);
+    public RandomForestAdapterJNA(String pathToJson, String pathToModelFile) throws FileNotFoundException {
+        _triedToLoadModel = false;
+        _manager = createRandomForestManagerFromFiles(pathToJson, pathToModelFile);
+    }
 
-        _classLabels = new int[_classCount];
-        Timber.d("Getting class labels");
-        randomForestGetClassLabels(_manager, _classLabels, _classCount);
+    public float getDesiredDurationSeconds() {
+        ensureModelIsLoaded();
+        return randomForestGetDesiredDuration(_manager);
+    }
+
+    public float getDesiredSpacingSeconds() {
+        ensureModelIsLoaded();
+        return randomForestGetDesiredSpacing(_manager);
     }
 
     public float[] classifyAccelerometerSignal(List<? extends SensorDataInterface> sensorDataList) throws IllegalArgumentException {
+        ensureModelIsLoaded();
         if (sensorDataList.size() == 0) {
             throw new IllegalArgumentException("Cannot classify empty list of sensor readings");
         }
@@ -88,6 +99,21 @@ public class RandomForestAdapterJNA implements RandomForestAdapter {
 
     public int[] getClassLabels() {
         return _classLabels;
+    }
+
+    public void ensureModelIsLoaded() {
+        if (!_triedToLoadModel) {
+            randomForestLoadModel(_manager);
+
+            Timber.d("Getting class count");
+            _classCount = randomForestGetClassCount(_manager);
+
+            _classLabels = new int[_classCount];
+            Timber.d("Getting class labels");
+            randomForestGetClassLabels(_manager, _classLabels, _classCount);
+
+            _triedToLoadModel = true;
+        }
     }
 
 }

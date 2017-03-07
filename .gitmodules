@@ -1,3 +1,6 @@
 [submodule "ActivityPredictor"]
 	path = ActivityPredictor
 	url = git@github.com:KnockSoftware/ActivityPredictor.git
+[submodule "jsoncpp"]
+	path = jsoncpp
+	url = git@github.com:open-source-parsers/jsoncpp.git

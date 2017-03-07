@@ -18,12 +18,11 @@ using namespace std;
 
 class RandomForest {
 public:
-    RandomForest(int sampleSize, int samplingRateHz, py::object pathToModelFile) {
-        _sampleSize = sampleSize;
-        _samplingRateHz = samplingRateHz;
+    RandomForest(py::object pathToJson, py::object pathToModelFile) {
         py::extract<char const*> modelPath(pathToModelFile);
+        py::extract<char const*> jsonPath(pathToJson);
         try {
-            _manager = createRandomForestManager(sampleSize, samplingRateHz, modelPath.check() ? modelPath() : NULL);
+            _manager = createRandomForestManagerFromFiles(jsonPath(), modelPath.check() ? modelPath() : NULL);
         }
         catch (std::exception& e) {
             PyErr_SetString(PyExc_RuntimeError, e.what());
@@ -31,10 +30,36 @@ public:
         catch (...) {
             PyErr_SetString(PyExc_RuntimeError, "Unknown error");
         }
+
+        if (_manager == NULL) {
+            throw std::runtime_error("Failed to create manager");
+        }
+        _n_classes = -1;
+    }
+    RandomForest(py::object jsonStringObj) {
+        py::extract<char const*> jsonString(jsonStringObj);
+        try {
+            _manager = createRandomForestManagerFromJsonString(jsonString());
+        }
+        catch (std::exception& e) {
+            PyErr_SetString(PyExc_RuntimeError, e.what());
+        }
+        catch (...) {
+            PyErr_SetString(PyExc_RuntimeError, "Unknown error");
+        }
+
+        if (_manager == NULL) {
+            throw std::runtime_error("Failed to create manager");
+        }
+
         _n_classes = -1;
     }
     ~RandomForest() {
         deleteRandomForestManager(_manager);
+    }
+
+    bool loadModel() {
+        return randomForestLoadModel(_manager);
     }
 
     bool canPredict() {
@@ -84,13 +109,19 @@ public:
     }
 
     float getDesiredSignalDuration() {
-        // Desired duration is the difference between the time of the first
-        // and the time of the last
-        return (_sampleSize - 1) / (float)_samplingRateHz;
+        return randomForestGetDesiredDuration(_manager);
     }
 
     float getDesiredSpacing() {
-        return 1.f / (float)_samplingRateHz;
+        return randomForestGetDesiredSpacing(_manager);
+    }
+
+    string getModelHash() {
+        return string(randomForestGetModelHash(_manager));
+    }
+
+    string getDataHash() {
+        return string(randomForestGetDataHash(_manager));
     }
 
     py::list classLabels() {
@@ -108,6 +139,7 @@ protected:
     int _sampleSize;
     int _samplingRateHz;
     int _n_classes;
+    bool _triedToLoadModel = false;
     void _checkNorms(py::list& norms) {
         if (py::len(norms) != _sampleSize) {
             throw std::length_error("Cannot classify vector with length that does not match sample size");
@@ -127,6 +159,11 @@ protected:
     }
 
     void _checkCanPredict() {
+        if (!_triedToLoadModel) {
+            loadModel();
+            _triedToLoadModel = true;
+        }
+
         if (!randomForestManagerCanPredict(_manager)) {
             throw std::runtime_error("RF Manager cannot predict");
         }
@@ -151,7 +188,9 @@ BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS(RandomForest_prepareFeaturesFromSignal_ov
 
 BOOST_PYTHON_MODULE(PYTHON_MODULE_NAME)
 {
-    py::class_<RandomForest>("RandomForest", py::init<int, int, py::object>())
+    py::class_<RandomForest>("RandomForest", py::init<py::object, py::object>())
+        .def(py::init<py::object>())
+        .def("loadModel", &RandomForest::loadModel)
         .def("classifyFeatures", &RandomForest::classifyFeatures)
         .def("classifySignal", &RandomForest::classifySignal)
         .def("prepareFeaturesFromSignal", &RandomForest::prepareFeaturesFromSignal,
@@ -164,5 +203,7 @@ BOOST_PYTHON_MODULE(PYTHON_MODULE_NAME)
         .add_property("feature_count", &RandomForest::getFeatureCount)
         .add_property("desired_signal_duration", &RandomForest::getDesiredSignalDuration)
         .add_property("desired_spacing", &RandomForest::getDesiredSpacing)
+        .add_property("model_hash", &RandomForest::getModelHash)
+        .add_property("data_hash", &RandomForest::getDataHash)
     ;
 }

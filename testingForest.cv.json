@@ -1,0 +1,7 @@
+{
+  "sampling": {
+    "sample_count": 64,
+    "sampling_rate_hz": 21
+  },
+  "otherstuff": "yo"
+}

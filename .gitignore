@@ -9,3 +9,6 @@ v/
 # default output / temp model
 model.android.cv
 model.ios.cv
+
+model.*.cv.json
+model.*.cv.*.json

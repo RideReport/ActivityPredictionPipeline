@@ -28,11 +28,13 @@ public class TesterApp {
             + ":" + System.getProperty("user.dir")
             + ":" + System.getProperty("user.dir") + "/mode_classification_wrapper/java");
 
-        String forestPath = "data/forestAccelOnly.cv";
-        if (args.length >= 1) {
-            forestPath = args[0];
+        String configPath = "testingForest.cv.json";
+        String forestPath = "testingForest.cv";
+        if (args.length >= 2) {
+            configPath = args[0];
+            forestPath = args[1];
         }
-        RandomForestAdapterJNA adapter = new RandomForestAdapterJNA(64, 20, forestPath);
+        RandomForestAdapterJNA adapter = new RandomForestAdapterJNA(configPath, forestPath);
 
         try {
             BufferedReader inputReader = new BufferedReader(new InputStreamReader(System.in));
