@@ -605,6 +605,7 @@ def updateSamplePickles(force_update=False):
     with Timer() as t:
         for sample_count in tqdm(pool.imap_unordered(updateContinuousIntervalsPickleFromJSONFile, filenames), total=len(filenames)):
             overall_sample_count += sample_count
+    pool.close()
     print "Completed {} samples from {}/{} files in {:.1f}s".format(overall_sample_count, len(filenames), len(all_filenames), t.elapsed)
 
 def updateFeatureSetsPickleFromCiSamplesPickle(platform, forestConfigStr, filename):
@@ -644,6 +645,7 @@ def updateFeatureSets(force_update=False, platform='android', config=''):
         for feature_count in tqdm(pool.imap_unordered(partial(updateFeatureSetsPickleFromCiSamplesPickle, platform, config), filenames), total=len(filenames)):
             overall_feature_count += feature_count
 
+    pool.close()
     print "Generated {} rows of features from {}/{} files in {:.1f}s".format(overall_feature_count, len(filenames), len(all_filenames), t.elapsed)
 
 def getFeatureSetsFromAllTrainableTSDs(platform, config=''):
@@ -860,6 +862,7 @@ def loadModelAndTestAgainstTSDs(forestPath, fraction=1.0, platform='android', co
                 old_confusion.setdefault(confusion_key, 0)
                 old_confusion[confusion_key] += 1
 
+    pool.close()
     print "Got {} predictions from {} TSDs in {:.1f}s".format(prediction_count, len(tsd_files), t.elapsed)
 
     print "Original prediction confusion:"

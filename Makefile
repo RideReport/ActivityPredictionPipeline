@@ -34,7 +34,7 @@ endif
 ifeq ($(SNAME), Darwin)
 
 all: rr_mode_classification_opencv.so rr_mode_classification_apple.so apple_fft.so opencv_fft.so utilityadapter.so librrnative.so java/build/libs/java-all.jar
-models: model.android.cv models.ios.cv
+models: model.android.cv model.ios.cv
 
 rr_mode_classification_apple.so: rr_mode_classification_apple.oo randomforestmanager.oo fftmanager.oo utility.oo jsoncpp.oo
 	$(CC) $^ -shared $(LFLAGS) -o $@
@@ -99,11 +99,11 @@ utilityadapter.oo: UtilityAdapter.cpp UtilityAdapter.hpp util.hpp ActivityPredic
 	$(COMPILE)
 
 # build
-model.android.cv: data/classification_data.*.jsonl data/*.ciSamples.pickle data/*.fsets.android.pickle rr_mode_classification_opencv.so
-	python pipeline.py all -p android --no-split
+model.android.cv: data/classification_data.*.jsonl data/*.ciSamples.pickle data/*.fsets.android.pickle rr_mode_classification_opencv.so pipeline.py
+	python pipeline.py all -p android --no-split -f
 
-model.ios.cv: data/classification_data.*.jsonl data/*.ciSamples.pickle data/*.fsets.ios.pickle rr_mode_classification_apple.so
-	python pipeline.py all -p ios --no-split
+model.ios.cv: data/classification_data.*.jsonl data/*.ciSamples.pickle data/*.fsets.ios.pickle rr_mode_classification_apple.so pipeline.py
+	python pipeline.py all -p ios --no-split -f
 
 .PHONY: clean install models
 
