@@ -92,7 +92,7 @@ opencv_fft.oo: OpenCVFFTPythonAdapter.cpp OpenCVFFTPythonAdapter.hpp util.hpp Ac
 utility.oo: ActivityPredictor/Utility.cpp ActivityPredictor/Utility.h
 	$(COMPILE)
 
-jsoncpp.oo: ActivityPredictor/jsoncpp.cpp ActivityPredictor/json/json.h
+jsoncpp.oo: ActivityPredictor/json/jsoncpp.cpp ActivityPredictor/json/json.h
 	$(COMPILE)
 
 utilityadapter.oo: UtilityAdapter.cpp UtilityAdapter.hpp util.hpp ActivityPredictor/Utility.cpp
