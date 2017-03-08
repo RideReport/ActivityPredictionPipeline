@@ -99,7 +99,6 @@ class TestRFManagerConfigurationJSON(unittest.TestCase, FixtureMixin):
         self.assertAlmostEqual(forest.desired_spacing, 1./21.)
         self.assertAlmostEqual(forest.desired_signal_duration, 63 / 21.)
         self.assertEqual(forest.model_hash, '')
-        self.assertEqual(forest.data_hash, '')
 
     def test_bad_string(self):
         with self.assertRaises(RuntimeError):
@@ -117,7 +116,6 @@ class TestRFManagerConfigurationJSON(unittest.TestCase, FixtureMixin):
         filename = os.path.join(fixture_dirname, 'model.ios.cv.json')
         forest = OpenCVRandomForest(filename, None)
         self.assertEqual(forest.model_hash, 'c2f58ebf0a157c4f27b113a1200af2aec76d7d9b4a5e602455dedb546709df4a')
-        self.assertEqual(forest.data_hash, '30f4b0de1fffab2c0e8bb81b701903b43775625b0e18e7fb405f395e311748a3')
 
 
 class TestInterpolation(unittest.TestCase, FixtureMixin):
