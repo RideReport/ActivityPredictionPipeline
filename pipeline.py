@@ -46,6 +46,16 @@ class IncompatibleActivityTypesError(ValueError):
 class IncompatibleConfigurationError(ValueError):
     pass
 
+class NonPredictingForestError(ValueError):
+    pass
+
+@contextmanager
+def terminatingPool():
+    try:
+        pool = Pool()
+        yield pool
+    finally:
+        pool.terminate()
 
 def sha256_sorted_json(thing):
     return hashlib.sha256(json.dumps(thing, sort_keys=True)).hexdigest()
@@ -435,7 +445,7 @@ class BuiltForest(object):
             sha256.update(json.dumps(value))
         return sha256.hexdigest()
 
-    def metadata(self, platform=None, split=None):
+    def metadata(self, **kwargs):
         thisRepo = git.Repo(os.path.abspath(os.path.dirname(__file__)), search_parent_directories=True)
         predictorRepo = git.Repo(os.path.abspath(os.path.join(os.path.dirname(__file__), 'ActivityPredictor')), search_parent_directories=True)
         data = dict(
@@ -450,13 +460,12 @@ class BuiltForest(object):
                 max_tree_count=self.builder.max_tree_count,
                 epsilon=self.builder.epsilon,
             ),
+            extra=kwargs,
             cv_sha256=filename_sha256_hexdigest(self.filename),
             cv=self.cv_meta,
             data=dict(
                 sha256=sha256_sorted_json(self.builder.dataId),
                 id=self.builder.dataId,
-                split=split,
-                platform=platform,
             ),
             code=dict(
                 pipeline_commit_sha=thisRepo.head.object.hexsha,
@@ -465,7 +474,7 @@ class BuiltForest(object):
                 predictor_is_dirty=predictorRepo.is_dirty(),
             ),
             confusion=dict(
-                matrix_is_oob=split,
+                matrix_is_oob=kwargs['split'],
                 matrix_str=self.matrix,
                 matrix_features_id=self.matrix_features_dataId,
             )
@@ -481,16 +490,16 @@ class BuiltForest(object):
                 data[key] = forestConfig[key]
         return data
 
-    def metadata_brief(self, platform=None, split=None):
-        data = self.metadata(platform=platform, split=split)
+    def metadata_brief(self, **kwargs):
+        data = self.metadata(**kwargs)
         del data['data']['id']
         del data['confusion']
         del data['cv']
         return data
 
-    def save_to_dir(self, dirname, platform, split):
-        recipe = self.metadata(platform=platform, split=split)
-        config = self.metadata_brief(platform=platform, split=split)
+    def save_to_dir(self, dirname, **kwargs):
+        recipe = self.metadata(**kwargs)
+        config = self.metadata_brief(**kwargs)
         with open(os.path.join(dirname, 'config.json'), 'wb') as f:
             f.write(json.dumps(config, indent=2, separators=(',', ': '), sort_keys=True))
 
@@ -782,7 +791,7 @@ def buildModelFromFeatureSetPickles(output_dir, split, exclude_labels, fraction=
         print "Confusion matrix for TRAINING DATA (no test data)"
         print builtforest.getConfusionMatrixStr(all_sets)
 
-    builtforest.save_to_dir(output_dir, platform, split)
+    builtforest.save_to_dir(output_dir, platform=platform, split=split, include_crowd_data=include_crowd_data)
     print "Saved to '{}'".format(output_dir)
     print "config.json contents:"
     with open(os.path.join(output_dir, 'config.json')) as f:
@@ -823,14 +832,9 @@ def getFeaturesAndLabelsFromTSD(tsd, forest):
 
     return np.array(features, dtype=np.float32), np.array(labels, dtype=np.int32)
 
-def predictTSDFileWithFilters(forestPath, platform, forestConfigStr, filename):
-    if platform == 'android':
-        from rr_mode_classification_opencv import RandomForest
-    elif platform == 'ios':
-        from rr_mode_classification_apple import RandomForest
-
+def predictTSDFileWithFilters(configPath, filename):
     with print_exceptions():
-        forest = RandomForest(forestConfigStr)
+        forest = loadForestForPrediction(configPath)
         classLabels = forest.classLabels()
         try:
             tsd = loadTSD(filename)
@@ -868,25 +872,37 @@ def predictTSDObjectWithFilters(tsd, forest):
         confusion_tuples.append((reportedActivityType, event.originalInferredActivityType, event.getFreshInferredType(forest)))
     return confusion_tuples
 
-def loadModelAndTestAgainstTSDs(configPath, fraction=1.0):
+FORESTS = {}
+def loadForestForPrediction(configPath):
+    if configPath not in FORESTS:
+        with open(configPath) as f:
+            config = json.load(f)
+            platform = config['extra']['platform']
+            modelPath = os.path.join(os.path.dirname(configPath), '{}.cv'.format(config['cv_sha256']))
+
+        if platform == 'android':
+            from rr_mode_classification_opencv import RandomForest
+        elif platform == 'ios':
+            from rr_mode_classification_apple import RandomForest
+
+
+        print "Loading forest id={}".format(config['cv_sha256'])
+
+        forest = RandomForest(configPath, modelPath)
+        if not forest.canPredict():
+            raise NonPredictingForestError("config at '{}' cannot predict!".format(configPath))
+        FORESTS[configPath] = forest
+
+    return FORESTS[configPath]
+
+def loadModelAndTestAgainstTSDs(configPath, fraction=1.0, seed=None):
     import glob
     import random
     import os
     from tqdm import tqdm
     from multiprocessing import Pool
-    with open(configPath) as f:
-        config = json.load(f)
-        platform = config['data']['platform']
 
-    if platform == 'android':
-        from rr_mode_classification_opencv import RandomForest
-    elif platform == 'ios':
-        from rr_mode_classification_apple import RandomForest
-
-    forest = RandomForest(configPath)
-    if not forest.canPredict():
-        print "model at '{}' Cannot predict!".format(configPath)
-        return
+    forest = loadForestForPrediction(configPath)
 
     print "Testing model: {} (id={})".format(os.path.abspath(configPath), forest.model_hash)
     classLabels = forest.classLabels()
@@ -907,35 +923,35 @@ def loadModelAndTestAgainstTSDs(configPath, fraction=1.0):
     fresh_confusion = {}
     old_confusion = {}
     with Timer() as t:
-        pool = Pool()
-        tsd_files = glob.glob('./data/tsd*.jsonl')
-        if fraction < 1.0:
-            print "Sampling TSDs: running predictions on {:.1%} of {} total".format(fraction, len(tsd_files))
-            tsd_files = random.sample(tsd_files, int(len(tsd_files)*fraction))
+        with terminatingPool() as pool:
+            tsd_files = glob.glob('./data/tsd*.jsonl')
+            if fraction < 1.0:
+                print "Sampling TSDs: running predictions on {:.1%} of {} total, seed={}".format(fraction, len(tsd_files), seed)
+                random.seed(seed)
+                tsd_files = random.sample(tsd_files, int(len(tsd_files)*fraction))
 
-        # big files first, for better parallelization
-        sorted_files = sorted(tsd_files, key=lambda filename: os.path.getsize(filename), reverse=True)
+            # big files first, for better parallelization
+            sorted_files = sorted(tsd_files, key=lambda filename: os.path.getsize(filename), reverse=True)
 
-        prediction_count = 0
-        for predictions in tqdm(pool.imap_unordered(partial(predictTSDFileWithFilters, forestPath, platform, config), sorted_files), total=len(sorted_files)):
-            for prediction in predictions:
-                try:
-                    reported_type, old_type, fresh_type = prediction
-                except TypeError:
+            prediction_count = 0
+            for predictions in tqdm(pool.imap_unordered(partial(predictTSDFileWithFilters, configPath), sorted_files), total=len(sorted_files)):
+                for prediction in predictions:
+                    try:
+                        reported_type, old_type, fresh_type = prediction
+                    except TypeError:
 
-                    continue
+                        continue
 
-                prediction_count += 1
+                    prediction_count += 1
 
-                confusion_key = (reported_type, fresh_type)
-                fresh_confusion.setdefault(confusion_key, 0)
-                fresh_confusion[confusion_key] += 1
+                    confusion_key = (reported_type, fresh_type)
+                    fresh_confusion.setdefault(confusion_key, 0)
+                    fresh_confusion[confusion_key] += 1
 
-                confusion_key = (reported_type, old_type)
-                old_confusion.setdefault(confusion_key, 0)
-                old_confusion[confusion_key] += 1
+                    confusion_key = (reported_type, old_type)
+                    old_confusion.setdefault(confusion_key, 0)
+                    old_confusion[confusion_key] += 1
 
-    pool.close()
     print "Got {} predictions from {} TSDs in {:.1f}s".format(prediction_count, len(tsd_files), t.elapsed)
 
     print "Original prediction confusion:"
@@ -969,6 +985,11 @@ def dispatchCommand(command, options):
 
     np.seterr(all='raise')
 
+    if options.sample_fraction is not None:
+        fraction = options.sample_fraction
+    else:
+        fraction = 1.0
+
     if command == 'updateSamples':
         updateSamplePickles(force_update=options.force_update)
     elif command == 'updateFeatures':
@@ -980,11 +1001,6 @@ def dispatchCommand(command, options):
         except:
             exclude_labels = []
 
-        if options.sample_fraction is not None:
-            fraction = options.sample_fraction
-        else:
-            fraction = 1.0
-
         buildModelFromFeatureSetPickles(
             output_dir=os.path.dirname(options.config_filename),
             split=options.split,
@@ -995,11 +1011,7 @@ def dispatchCommand(command, options):
             seed=options.seed,
             builder_kwargs=config_json['builder'])
     elif command == 'test':
-        if options.sample_fraction is not None:
-            fraction = options.sample_fraction
-        else:
-            fraction = 0.1
-        loadModelAndTestAgainstTSDs(options.config_filename, fraction=fraction, platform=options.platform)
+        loadModelAndTestAgainstTSDs(options.config_filename, fraction=fraction, seed=options.seed)
     elif command == 'all':
         dispatchCommand('updateSamples', options)
         dispatchCommand('updateFeatures', options)
