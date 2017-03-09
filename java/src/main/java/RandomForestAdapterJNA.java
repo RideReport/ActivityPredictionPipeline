@@ -24,52 +24,61 @@ import timber.log.Timber;
 public class RandomForestAdapterJNA implements RandomForestAdapter {
     public static class RFManagerPtr extends PointerType {}
 
-    private static native RFManagerPtr createRandomForestManagerFromFiles(String pathToJson, String pathToModelFile);
-    private static native boolean randomForestLoadModel(RFManagerPtr manager);
-    private static native float randomForestGetDesiredDuration(RFManagerPtr manager);
-    private static native float randomForestGetDesiredSpacing(RFManagerPtr manager);
-
+    private static native RFManagerPtr createRandomForestManagerFromFile(String pathToConfigurationFile);
+    private static native boolean randomForestLoadModel(RFManagerPtr manager, String pathToModelFile);
+    private static native String randomForestGetModelUniqueIdentifier(RFManagerPtr manager);
+    private static native float randomForestGetDesiredSessionDuration(RFManagerPtr manager);
+    private static native float randomForestGetDesiredSamplingInterval(RFManagerPtr manager);
     private static native int randomForestGetClassCount(RFManagerPtr manager);
     private static native void randomForestGetClassLabels(RFManagerPtr manager, int[] labels, int labelCount);
     private static native boolean randomForestClassifyAccelerometerSignal(RFManagerPtr manager, AccelerometerReading.ByReference signal, int readingCount, float[] confidences, int n_classes);
+    private static native boolean randomForestManagerCanPredict(RFManagerPtr manager);
 
     static {
-		try {
-		    System.loadLibrary("jnidispatch");
-		}
-		catch (UnsatisfiedLinkError e) {
-		    if (System.getProperty("java.vm.name").equalsIgnoreCase("Dalvik")) {
-		        Timber.d("Failed to load jnidispatch; trying to load Native anyway.");
-		    }
-		    else {
-		        Timber.d("jnidispatch did not load; this is usually OK off Android");
-		    }
-		}
+        System.loadLibrary("jnidispatch");
         Native.register(RandomForestAdapterJNA.class, "rrnative");
     }
 
     private RFManagerPtr _manager;
     private int _classCount;
     private int[] _classLabels;
-    private boolean _triedToLoadModel;
 
-    public RandomForestAdapterJNA(String pathToJson, String pathToModelFile) throws FileNotFoundException {
-        _triedToLoadModel = false;
-        _manager = createRandomForestManagerFromFiles(pathToJson, pathToModelFile);
+    public RandomForestAdapterJNA(String filename) throws FileNotFoundException {
+        _manager = createRandomForestManagerFromFile(filename);
     }
 
-    public float getDesiredDurationSeconds() {
-        ensureModelIsLoaded();
-        return randomForestGetDesiredDuration(_manager);
+    public boolean loadModelFile(String filename) {
+        if(!randomForestLoadModel(_manager, filename)) {
+            return false;
+        }
+
+        Timber.d("Getting class count");
+        _classCount = randomForestGetClassCount(_manager);
+
+        _classLabels = new int[_classCount];
+        Timber.d("Getting class labels");
+        randomForestGetClassLabels(_manager, _classLabels, _classCount);
+
+        return true;
     }
 
-    public float getDesiredSpacingSeconds() {
-        ensureModelIsLoaded();
-        return randomForestGetDesiredSpacing(_manager);
+    public boolean getCanPredict() {
+        return randomForestManagerCanPredict(_manager);
+    }
+
+    public String getModelUniqueIdentifier() {
+        return randomForestGetModelUniqueIdentifier(_manager);
+    }
+
+    public Float getDesiredSampleIntervalSeconds() {
+        return randomForestGetDesiredSamplingInterval(_manager);
+    }
+
+    public Float getDesiredSessionDurationSeconds() {
+        return randomForestGetDesiredSessionDuration(_manager);
     }
 
     public float[] classifyAccelerometerSignal(List<? extends SensorDataInterface> sensorDataList) throws IllegalArgumentException {
-        ensureModelIsLoaded();
         if (sensorDataList.size() == 0) {
             throw new IllegalArgumentException("Cannot classify empty list of sensor readings");
         }
@@ -99,21 +108,6 @@ public class RandomForestAdapterJNA implements RandomForestAdapter {
 
     public int[] getClassLabels() {
         return _classLabels;
-    }
-
-    public void ensureModelIsLoaded() {
-        if (!_triedToLoadModel) {
-            randomForestLoadModel(_manager);
-
-            Timber.d("Getting class count");
-            _classCount = randomForestGetClassCount(_manager);
-
-            _classLabels = new int[_classCount];
-            Timber.d("Getting class labels");
-            randomForestGetClassLabels(_manager, _classLabels, _classCount);
-
-            _triedToLoadModel = true;
-        }
     }
 
 }

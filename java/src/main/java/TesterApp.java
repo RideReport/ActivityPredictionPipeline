@@ -34,7 +34,8 @@ public class TesterApp {
             configPath = args[0];
             forestPath = args[1];
         }
-        RandomForestAdapterJNA adapter = new RandomForestAdapterJNA(configPath, forestPath);
+        RandomForestAdapterJNA adapter = new RandomForestAdapterJNA(configPath);
+        adapter.loadModelFile(forestPath);
 
         try {
             BufferedReader inputReader = new BufferedReader(new InputStreamReader(System.in));

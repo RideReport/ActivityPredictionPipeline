@@ -108,7 +108,7 @@ public:
     }
 
     float getDesiredSignalDuration() {
-        return randomForestGetDesiredReadingDuration(_manager);
+        return randomForestGetDesiredSessionDuration(_manager);
     }
 
     float getDesiredSpacing() {
