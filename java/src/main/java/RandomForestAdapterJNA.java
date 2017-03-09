@@ -35,7 +35,17 @@ public class RandomForestAdapterJNA implements RandomForestAdapter {
     private static native boolean randomForestManagerCanPredict(RFManagerPtr manager);
 
     static {
-        System.loadLibrary("jnidispatch");
+        try {
+            System.loadLibrary("jnidispatch");
+        }
+        catch (UnsatisfiedLinkError e) {
+            if (System.getProperty("java.vm.name").equalsIgnoreCase("Dalvik")) {
+                throw e;
+            }
+            else {
+                Timber.d("jnidispatch did not load; this is usually OK off Android");
+            }
+        }
         Native.register(RandomForestAdapterJNA.class, "rrnative");
     }
 
