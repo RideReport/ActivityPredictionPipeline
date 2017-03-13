@@ -18,6 +18,7 @@ from functools import partial
 
 
 from multiprocessing import Pool
+from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 import glob
 from operator import itemgetter
@@ -50,9 +51,13 @@ class NonPredictingForestError(ValueError):
     pass
 
 @contextmanager
-def terminatingPool():
-    try:
+def terminatingPool(use_processes=True):
+    if use_processes:
         pool = Pool()
+    else:
+        pool = ThreadPool()
+
+    try:
         yield pool
     finally:
         pool.terminate()
@@ -408,7 +413,8 @@ class BuiltForest(object):
 
         self.cv_meta = self._loadMetaFromCvFile(filename)
 
-    def _loadMetaFromCvFile(self, filename):
+    @classmethod
+    def _loadMetaFromCvFile(cls, filename):
         text = u''
         with open(filename) as f:
             f.readline() # skip first line
@@ -506,7 +512,13 @@ class BuiltForest(object):
         with open(os.path.join(dirname, 'recipe.json'), 'wb') as f:
             f.write(json.dumps(recipe, indent=2, separators=(',', ': '), sort_keys=True))
 
-        os.rename(self.filename, os.path.join(dirname, '{}.cv'.format(recipe['cv_sha256'])))
+        cv_filename = '{}.cv'.format(recipe['cv_sha256'])
+        os.rename(self.filename, os.path.join(dirname, cv_filename))
+
+        # Delete other entries
+        for entryname in os.listdir(dirname):
+            if entryname not in ('config.json', 'recipe.json', cv_filename):
+                os.remove(os.path.join(dirname, entryname))
 
 
 class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
@@ -697,10 +709,10 @@ def updateFeatureSets(force_update=False, platform='android', config=''):
     pool.close()
     print "Generated {} rows of features from {}/{} files in {:.1f}s".format(overall_feature_count, len(filenames), len(all_filenames), t.elapsed)
 
-def getFeatureSetsFromAllTrainableTSDs(platform, config=''):
+def getFeatureSetsFromAllTrainableTSDs(platform, config='', use_processes=True):
     filenames = glob.glob('./data/trusted_tsd.*.jsonl')
-    pool = Pool()
-    return list(tqdm(pool.imap_unordered(partial(getFeatureSetFromTrainableTSDFile, platform, config), filenames), total=len(filenames)))
+    with terminatingPool(use_processes) as pool:
+        return list(tqdm(pool.imap_unordered(partial(getFeatureSetFromTrainableTSDFile, platform, config), filenames), total=len(filenames)))
 
 def getReportedActivityTypeWithOverrides(tsd):
     if tsd.reportedActivityType == 4 and 'run' in tsd.notes:
@@ -747,10 +759,8 @@ def loadFeatureSets(filename):
             FSET_FILE_CACHE[filename] = pickle.load(f)
     return FSET_FILE_CACHE[filename]
 
-def buildModelFromFeatureSetPickles(output_dir, split, exclude_labels, fraction=1.0, include_crowd_data=False, platform='android', seed=None, builder_kwargs={}):
+def loadAllFeatureSets(platform, seed, fraction, include_crowd_data, use_processes, exclude_labels, do_print=True):
     all_sets = []
-
-    print "Building model to directory: {}".format(output_dir)
 
     filenames = glob.glob('./data/*.fsets.{}.pickle'.format(platform))
     if fraction < 1.0:
@@ -770,11 +780,44 @@ def buildModelFromFeatureSetPickles(output_dir, split, exclude_labels, fraction=
         config = all_sets[0].forestConfigStr
 
         print "Loading whitelisted TSDs"
-        all_sets += getFeatureSetsFromAllTrainableTSDs(platform, config)
+        all_sets += getFeatureSetsFromAllTrainableTSDs(platform, config, use_processes=use_processes)
 
         print "Loading trusted TSD events"
         all_sets += getFeatureSetsFromTrustedEventsPickle(platform, config)
 
+    return all_sets
+
+def buildModelFromFeatureSetPickles(output_dir, split, exclude_labels,
+        use_processes=True,
+        fraction=1.0,
+        include_crowd_data=False,
+        platform='android',
+        seed=None,
+        builder_kwargs={}):
+
+    print "Building model to directory: {}".format(output_dir)
+
+    all_sets = loadAllFeatureSets(
+        platform=platform,
+        seed=seed,
+        fraction=fraction,
+        include_crowd_data=include_crowd_data,
+        use_processes=use_processes,
+        exclude_labels=exclude_labels)
+
+    return buildModelFromFeatureSets(output_dir,
+        all_sets,
+        split=split,
+        builder_kwargs=builder_kwargs,
+        include_crowd_data=include_crowd_data)
+
+def buildModelFromFeatureSets(output_dir,
+        all_sets,
+        split=False,
+        builder_kwargs={},
+        seed=None,
+        include_crowd_data=True,
+        platform='android'):
     if split:
         train_sets, test_sets = split_fsets(all_sets, seed=seed)
         builder = ModelBuilder(train_sets, **builder_kwargs)
@@ -797,7 +840,6 @@ def buildModelFromFeatureSetPickles(output_dir, split, exclude_labels, fraction=
     with open(os.path.join(output_dir, 'config.json')) as f:
         config = json.load(f)
         print ''.join('   '+line for line in json.dumps(config, indent=2, sort_keys=True).splitlines(True))
-
 
 def loadTSD(filename, force_update=False):
 
@@ -895,6 +937,19 @@ def loadForestForPrediction(configPath):
 
     return FORESTS[configPath]
 
+def printConfusion(confusion):
+    print "reported label on left; prediction on top"
+    labels = [1, 2, 3, 4, 5, 6, 7]
+    print '   {}  TOTAL'.format(' '.join("{: 4}".format(column_title) for column_title in labels))
+    for reported_label in labels:
+        print "{: 2}".format(reported_label),
+        total = sum(v for k, v in confusion.items() if k[0] == reported_label)
+        total = max(total, 1)
+        for predicted_label in labels:
+            k = (reported_label, predicted_label)
+            print "{: 4.0f}".format(confusion.get(k, 0) / float(total) * 100),
+        print "{: 6}".format(total)
+
 def loadModelAndTestAgainstTSDs(configPath, fraction=1.0, seed=None):
     import glob
     import random
@@ -907,28 +962,34 @@ def loadModelAndTestAgainstTSDs(configPath, fraction=1.0, seed=None):
     print "Testing model: {} (id={})".format(os.path.abspath(configPath), forest.model_hash)
     classLabels = forest.classLabels()
 
-    def printConfusion(confusion):
-        print "reported label on left; prediction on top"
-        labels = [1, 2, 3, 4, 5, 6, 7]
-        print '   {}  TOTAL'.format(' '.join("{: 4}".format(column_title) for column_title in labels))
-        for reported_label in labels:
-            print "{: 2}".format(reported_label),
-            total = sum(v for k, v in confusion.items() if k[0] == reported_label)
-            total = max(total, 1)
-            for predicted_label in labels:
-                k = (reported_label, predicted_label)
-                print "{: 4.0f}".format(confusion.get(k, 0) / float(total) * 100),
-            print "{: 6}".format(total)
+    with open(configPath) as f:
+        config = json.load(f)
 
     fresh_confusion = {}
     old_confusion = {}
     with Timer() as t:
         with terminatingPool() as pool:
             tsd_files = glob.glob('./data/tsd*.jsonl')
+
+            # exclude trusted TSDs if they were used for training
+
+            if config['extra'].get('include_crowd_data', True):
+                with open(os.path.join(os.path.dirname(__file__), 'trusted_tsds.pickle')) as f:
+                    pks = list(tsd.trip_pk for tsd in pickle.load(f))
+                exclude = set()
+                for pk in pks:
+                    for filename in tsd_files:
+                        if pk in filename:
+                            exclude.add(filename)
+                tsd_files = [fname for fname in tsd_files if fname not in exclude]
+                print "Excluded {} trusted TSDs from testing".format(len(exclude))
+
             if fraction < 1.0:
                 print "Sampling TSDs: running predictions on {:.1%} of {} total, seed={}".format(fraction, len(tsd_files), seed)
                 random.seed(seed)
                 tsd_files = random.sample(tsd_files, int(len(tsd_files)*fraction))
+
+
 
             # big files first, for better parallelization
             sorted_files = sorted(tsd_files, key=lambda filename: os.path.getsize(filename), reverse=True)
@@ -954,6 +1015,19 @@ def loadModelAndTestAgainstTSDs(configPath, fraction=1.0, seed=None):
 
     print "Got {} predictions from {} TSDs in {:.1f}s".format(prediction_count, len(tsd_files), t.elapsed)
 
+    tsd_test_results = {
+        'tsds': [
+            { 'sha256': filename_sha256_hexdigest(filename), 'basename': os.path.basename(filename) }
+            for filename in tsd_files
+        ],
+        'original_confusion': old_confusion,
+        'fresh_confusion': fresh_confusion,
+    }
+    results_filename = os.path.join(os.path.dirname(configPath), 'tsd_test_results.pickle')
+    with open(results_filename, 'wb') as f:
+        pickle.dump(tsd_test_results, f, protocol=pickle.HIGHEST_PROTOCOL)
+    print "Saved results to {}".format(results_filename)
+
     print "Original prediction confusion:"
     printConfusion(old_confusion)
 
@@ -966,19 +1040,33 @@ def dispatchCommand(command, options):
         if getattr(options, k) is not None:
             builder_kwargs[k] = getattr(options, k)
 
-    if options.config_filename is None:
-        predictor_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'ActivityPredictor'))
-        platform_dir = os.path.join(predictor_dir, 'models', options.platform)
-        options.config_filename = os.path.join(platform_dir, 'config.json')
+    try:
+        with open(options.config_filename) as f:
+            config_json = json.load(f)
+    except:
+        # No working configuration file; create default
         config_json = { 'sampling': { 'sample_count': options.sample_count, 'sampling_rate_hz': options.sampling_rate_hz }}
         info = inspect.getargspec(ModelBuilder.__init__)
         config_json['builder'] = { k: v for k, v in izip(info.args[-len(info.defaults):], info.defaults) }
-        config_json['builder'].update(builder_kwargs)
+        if options.build_to_production:
+            # Production models go in ActivityPredictor/<platform>/config.json
+            predictor_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'ActivityPredictor'))
+            forest_dir = os.path.join(predictor_dir, 'models', options.platform)
+        else:
+            forest_dir = os.path.join(os.path.dirname(__file__), 'models', options.platform)
+            try: os.makedirs(forest_dir)
+            except: pass
+
+        if options.config_filename is None:
+            # write new forest to this location
+            options.config_filename = os.path.join(forest_dir, 'config.json')
     else:
-        with open(options.config_filename) as f:
-            config_json = json.load(f)
+        # We loaded a model config
         config_json.setdefault('builder', {})
-        config_json['builder'].update(options.builder_kwargs)
+
+    # Whether we loaded a file or not, we should override with builder args
+    # provided directly
+    config_json['builder'].update(builder_kwargs)
 
     print "Loaded configuration: "
     print ''.join('   '+line for line in json.dumps(config_json, indent=2).splitlines(True))
@@ -1001,8 +1089,9 @@ def dispatchCommand(command, options):
         except:
             exclude_labels = []
 
-        buildModelFromFeatureSetPickles(
+        return buildModelFromFeatureSetPickles(
             output_dir=os.path.dirname(options.config_filename),
+            use_processes=options.use_processes,
             split=options.split,
             fraction=fraction,
             exclude_labels=exclude_labels,
@@ -1020,7 +1109,7 @@ def dispatchCommand(command, options):
     else:
         raise ValueError("Unknown command: {}".format(command))
 
-if __name__ == '__main__':
+def getPipelineParser():
     import argparse
     parser = argparse.ArgumentParser(description="run a pipeline command")
     parser.add_argument('command', metavar='CMD', type=str)
@@ -1033,6 +1122,9 @@ if __name__ == '__main__':
     parser.add_argument('--sample-fraction', dest='sample_fraction', default=None, type=float)
     parser.add_argument('--sample-count', dest='sample_count', default=64, type=int)
     parser.add_argument('--sampling-rate-hz', dest='sampling_rate_hz', default=21., type=float)
+    parser.add_argument('--use-threads', dest='use_processes', default=True, action='store_false')
+
+    parser.add_argument('-P', '--production', dest='build_to_production', default=False, action='store_true')
 
     parser.add_argument('--train-sample-count-multiple', dest='sample_count_multiple', default=None, type=float)
     parser.add_argument('--train-active-var-count', dest='active_var_count', default=None, type=int)
@@ -1041,7 +1133,12 @@ if __name__ == '__main__':
 
     parser.add_argument('--exclude-crowd-data', dest='exclude_crowd_data', action='store_true', default=False)
 
-    args = parser.parse_args()
+    return parser
+
+
+if __name__ == '__main__':
+
+    args = getPipelineParser().parse_args()
     try:
         dispatchCommand(args.command, args)
     except ValueError as e:

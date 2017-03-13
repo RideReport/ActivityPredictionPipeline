@@ -12,3 +12,5 @@ model.ios.cv
 
 model.*.cv.json
 model.*.cv.*.json
+
+models/
