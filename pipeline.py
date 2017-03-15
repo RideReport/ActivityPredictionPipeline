@@ -549,7 +549,10 @@ class TSDEvent(npReadingsMixin, npSpeedReadingsMixin):
         notes = []
         notes.append('Original inference: {}'.format(self.originalInferredActivityType))
 
-        notes.append('Original predictions: {}'.format(ordered_predictions_str(self.originalPredictions)))
+        try:
+            notes.append('Original predictions: {}'.format(ordered_predictions_str(self.originalPredictions)))
+        except AttributeError:
+            notes.append('No known original predictions.')
         if self.averageSpeed is None:
             notes.append('Unknown speed')
         else:
@@ -592,6 +595,8 @@ class PreparedTSD(object):
         if self.notes is None:
             self.notes = ''
         self.reportedActivityType = tsd_dict['reported_type']
+        self.predictedActivityType = tsd_dict.get('predicted_type', None)
+        self.client = tsd_dict.get('client', {})
 
         try:
             if tsd_dict['client']['name'] == 'RR':
