@@ -4,6 +4,8 @@
 *.pyc
 v/
 
+opencv_build/
+
 .ipynb_checkpoints/
 
 # default output / temp model

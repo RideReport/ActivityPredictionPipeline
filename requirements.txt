@@ -4,7 +4,6 @@
 #
 #    pip-compile --output-file requirements.txt requirements.in
 #
-appdirs==1.4.0            # via setuptools
 certifi==2017.1.23
 cffi==1.9.1               # via cryptography
 contexttimer==0.3.3
@@ -20,20 +19,17 @@ ipaddress==1.0.18         # via cryptography
 matplotlib==2.0.0
 mpld3==0.3
 numpy==1.10.4
-packaging==16.8           # via setuptools
 pyasn1==0.2.2             # via cryptography
 pycparser==2.17           # via cffi
 pyopenssl==16.2.0
-pyparsing==2.1.10         # via matplotlib, packaging
+pyparsing==2.1.10         # via matplotlib
 python-dateutil==2.5.1
 pytz==2016.4              # via matplotlib
+pyyaml==3.12
 requests-futures==0.9.7
 requests==2.13.0
 scipy==0.17.0
-six==1.10.0               # via cryptography, cycler, matplotlib, packaging, pyopenssl, python-dateutil, setuptools
+six==1.10.0               # via cryptography, cycler, matplotlib, pyopenssl, python-dateutil
 smmap2==2.0.1             # via gitdb2
 subprocess32==3.2.7       # via matplotlib
 tqdm==4.11.2
-
-# The following packages are considered to be unsafe in a requirements file:
-# setuptools                # via cryptography

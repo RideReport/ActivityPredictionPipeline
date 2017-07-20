@@ -4,3 +4,7 @@
 [submodule "jsoncpp"]
 	path = jsoncpp
 	url = git@github.com:open-source-parsers/jsoncpp.git
+[submodule "opencv"]
+	path = opencv
+	url = git@github.com:KnockSoftware/opencv.git
+	branch = rtrees-confidence

@@ -4,6 +4,8 @@ numpy
 scipy
 mpld3
 
+pyyaml
+
 requests
 
 pyOpenSSL
