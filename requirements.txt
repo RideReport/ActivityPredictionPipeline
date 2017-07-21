@@ -33,3 +33,6 @@ six==1.10.0               # via cryptography, cycler, matplotlib, pyopenssl, pyt
 smmap2==2.0.1             # via gitdb2
 subprocess32==3.2.7       # via matplotlib
 tqdm==4.11.2
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools                # via cryptography

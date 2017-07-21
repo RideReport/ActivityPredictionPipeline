@@ -1,12 +1,14 @@
 #!/bin/bash
 
+set -e -x
+
 mkdir -p opencv_build
 cd opencv_build
 
 VIRTUALENV_PREFIX="`python -c "from distutils.sysconfig import get_python_lib; libdir = get_python_lib(); print libdir.replace('/lib/python2.7/site-packages', '');"`"
 
 cmake ../opencv \
-  -DCMAKE_INSTALL_PREFIX="$VIRTUALENV_PREFIX"
+  -DCMAKE_INSTALL_PREFIX="$VIRTUALENV_PREFIX" \
   -DBUILD_CUDA_STUBS=OFF \
   -DBUILD_DOCS=OFF \
   -DBUILD_EXAMPLES=OFF \
