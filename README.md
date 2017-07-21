@@ -145,3 +145,22 @@ between 0 and 1 to train on a random subset of the feature sets. Use
  * `--train-max-tree-count`: Maximum number of trees in final model. The primary
    termination criteria. Default: `10`
  * `--train-epsilon`: Another termination criteria. Default: `0.0001`.
+
+# Command-line options
+
+ * `-p --platform`: Name of target platform, `ios` or `android`. Affects `updateFeatures` and `train` and `test`.
+ * `-f --force`: Force updating derivatives
+ * `--exclude-labels <1,2,3>`: Exclude specified classes of motion from training, used only in `train` command.
+ * `--no-split`: Disable default train/test split
+ * `-c --config`: Load configuration parameters from specified file. Overrides command-line parameters.
+ * `-s --seed <value>`: Seed for random number generator used in splitting or in `--sample-fraction`. Any string value is accepted.
+ * `--sample-fraction`: Train on a fraction of available samples.
+ * `--sample-count`: Number of readings used in feature creation. Affects `updateFeatures` and `test`.
+ * `--sampling-rate-hz`: Frequency of accelerometer readings. Training data will be resampled to this frequency.
+ * `--use-threads`: Parallelize with threads. Not generally recommended; the default uses processes which is faster for most things.
+ * `-P --production`: Build to the production model location
+ * `--train-sample-count-multiple`: See `train`.
+ * `--train-active-var-count`: See `train`.
+ * `--train-max-tree-count`: See `train`.
+ * `--train-epsilon`: See `train`.
+ * `--exclude-crowd-data`: Disable TSDs during training. Recommended.
