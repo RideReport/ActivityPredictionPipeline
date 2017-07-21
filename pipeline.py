@@ -123,6 +123,26 @@ def readingsFromNPReadings(npReadings):
         })
     return readings
 
+class TSDConfusionAccumulator(object):
+    def __init__(self):
+        self.old = {}
+        self.fresh = {}
+        self.count = 0
+
+    def add(self, prediction):
+        reported_type, old_type, fresh_type = prediction
+
+        self.count += 1
+
+        k = (reported_type, old_type)
+        self.old.setdefault(k, 0)
+        self.old[k] += 1
+
+        k = (reported_type, fresh_type)
+        self.fresh.setdefault(k, 0)
+        self.fresh[k] += 1
+
+
 class LocationSpeedVector(object):
     epoch = pytz.utc.localize(datetime.datetime.utcfromtimestamp(0))
 
@@ -206,6 +226,31 @@ class ContinuousIntervalSample(npReadingsMixin, npSpeedReadingsMixin):
         else:
             self.npSpeedReadings = np.empty((0, 2))
 
+    def generateSubSampleMasks(self, spacing, desired_duration):
+        offsetIndex = 0
+        previousStartIndex = -1
+        previousAfterEndIndex = -1
+        while True:
+            offset = offsetIndex * spacing
+
+            minT = self.minT + offset
+            maxT = minT + desired_duration
+            readingTimes = self.npReadings[:,READING_T]
+            mask = (readingTimes >= minT) & (readingTimes <= maxT)
+            startIndex = np.argmax(mask)
+
+            if startIndex != previousStartIndex:
+                yield mask
+
+            # Get index of first True value, starting from the end of the mask.
+            # If this is zero, then we're done.
+            indicesToRight = np.argmax(mask[::-1])
+            if indicesToRight == 0:
+                return
+
+            offsetIndex += 1
+            previousStartIndex = startIndex
+
     @classmethod
     def makeMany(cls, sample,
             max_spacing=MAX_ALLOWED_SPACING,
@@ -279,35 +324,21 @@ class LabeledFeatureSet(object):
         """Generate features based on a continuous sample.
 
         It is OK to do a rolling window here because the test/train split
-        is done on the LabeledFeatureSet level
+        is done on the LabeledFeatureSet level and every overlapping sample
+        generated here will be recorded to the same LabeledFeatureSet.
         """
-        try:
-            offsetIndex = 0
-            previousStartIndex = -1
-            while True:
-                offset = offsetIndex * spacing
 
-                # construct sub-samping window of desired duration, plus 10%
-                # for safety
-                minT = ciSample.minT + offset
-                maxT = minT + forest.desired_signal_duration*1.1
-                readingTimes = ciSample.npReadings[:,READING_T]
-                mask = (readingTimes >= minT) & (readingTimes <= maxT)
-                startIndex = np.argmax(mask)
-
-                if startIndex != previousStartIndex:
-                    # convert to dict because that's what C++ wrapper expects
-                    readings = readingsFromNPReadings(ciSample.npReadings[mask])
-
-                    yield forest.prepareFeaturesFromSignal(readings)
-
-                offsetIndex += 1
-                previousStartIndex = startIndex
-        except RuntimeError as e:
-            if 'probably not enough data' in str(e):
-                pass
-            else:
-                raise
+        # construct sub-samping window of desired duration, plus 10%
+        # for safety
+        for mask in ciSample.generateSubSampleMasks(spacing=spacing, desired_duration=forest.desired_signal_duration*1.1):
+            readings = readingsFromNPReadings(ciSample.npReadings[mask])
+            try:
+                yield forest.prepareFeaturesFromSignal(readings)
+            except RuntimeError as e:
+                if 'probably not enough data' in str(e):
+                    break
+                else:
+                    raise
 
 class ModelBuilder(object):
 
@@ -814,6 +845,8 @@ def buildModelFromFeatureSetPickles(output_dir, split, exclude_labels,
         all_sets,
         split=split,
         builder_kwargs=builder_kwargs,
+        seed=seed,
+        platform=platform,
         include_crowd_data=include_crowd_data)
 
 def buildModelFromFeatureSets(output_dir,

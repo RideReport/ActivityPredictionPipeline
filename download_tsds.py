@@ -12,32 +12,10 @@ import argparse
 parser = argparse.ArgumentParser(description="")
 parser.add_argument('--all', action='store_true', dest='refresh_all')
 args = parser.parse_args()
-
-class AutoRefreshingJWT(object):
-    def __init__(self):
-        self._token = None
-
-    @property
-    def token(self):
-        if self._token is None:
-            print("Refreshing token ...")
-            response_body = subprocess.check_output("ssh -Cqt rideserver@rideserver-backend-1 ./manage.py get_admin_jwt", shell=True)
-            data = json.loads(response_body.split('\n')[0])
-            self._token = data['token']
-            print("Got new token")
-        return self._token
-
-    def reset(self):
-        self._token = None
-
-    def __unicode__(self):
-        return self.token
-
-    def __str__(self):
-        return unicode(self)
+from tsd_tools import JWTWrapper
 
 
-auto_token = AutoRefreshingJWT()
+auto_token = JWTWrapper()
 
 STORAGE_FORMAT = "./data/tsd.{trip_pk}.jsonl"
 

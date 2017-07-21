@@ -4,6 +4,7 @@ def _getUrlWithJWT(url, token):
         'Authorization': 'JWT {}'.format(token),
     }
     response = requests.get(url, headers=headers)
+    response.raise_for_status()
     return response.json()
 
 def fetchResourceInJupyter(varname, url):
@@ -14,14 +15,28 @@ def fetchResourceInJupyter(varname, url):
     # Get a token from browser-land so we can make a request in python-land and fetch stuff directly that way.
     func = """
     (function(varname, url) {
-        function onDone() {
-            element.html('<tt>'+ varname +'</tt> loaded successfully');
+        function onDone(msg) {
+            var content = msg.content;
+            var status = content.status;
+            if (status == 'ok') {
+                element.html('<tt>'+ varname +'</tt> loaded successfully');
+            }
+            else if (status == 'error') {
+                element.html('<tt>Error: '+ content.ename +' '+ content.evalue +'</tt>');
+            }
+            else {
+                element.html('<tt>Unknown error: '+ content.status +'</tt>');
+            }
         }
 
         var xhr = new XMLHttpRequest();
         xhr.open('POST', 'https://ride.report/api/v2/shortlived_jwt_token');
         xhr.withCredentials = true;
         xhr.onload = function(e) {
+            if (xhr.status != 200) {
+                element.html('<tt>Failed: '+ xhr.status +' '+ xhr.responseText +'</tt>');
+                return;
+            }
             var kernel = IPython.notebook.kernel;
             var token = JSON.parse(xhr.responseText)['token'];
             var callbacks = {
