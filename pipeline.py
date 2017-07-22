@@ -1120,6 +1120,14 @@ def dispatchCommand(command, options):
         updateSamplePickles(force_update=options.force_update)
     elif command == 'updateFeatures':
         updateFeatureSets(force_update=options.force_update, platform=options.platform, config=json.dumps(config_json))
+    elif command == 'graphFeatures':
+        from feature_graph import graphFeaturesFromPickles
+        graphFeaturesFromPickles(
+            labels=[2,4],
+            platform=options.platform,
+            seed=options.seed,
+            fraction=fraction,
+        )
     elif command == 'train':
 
         try:

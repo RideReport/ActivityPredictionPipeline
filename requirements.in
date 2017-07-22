@@ -3,6 +3,8 @@ python-dateutil
 numpy
 scipy
 mpld3
+sklearn
+ipdb
 
 pyyaml
 
