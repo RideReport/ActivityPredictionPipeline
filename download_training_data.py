@@ -30,6 +30,10 @@ for item in items:
         print("Skipping item={} because of notes: {}".format(item['pk'], item['notes']))
         item['load'] = False
 
+    if not item['included']:
+        print("Skipping item={pk} because `included` is False; notes={notes}, admin_notes={admin_notes}".format(**item))
+        item['load'] = False
+
 for item in items:
     if item.get('load', True):
         cmd = "ssh -Cqt rideserver@rideserver-backend-1 ./manage.py export_ios_classification_data {pk}".format(**item)
