@@ -519,6 +519,12 @@ class BuiltForest(object):
 
         # merge forest configuration used for features into metadata
         forestConfig = json.loads(self.builder.forestConfigStr)
+
+        # Builder configuration from features is never relevant; it can lead to
+        # bad configuration being saved.
+        if 'builder' in forestConfig:
+            del forestConfig['builder']
+
         for key in forestConfig:
             if isinstance(forestConfig[key], dict):
                 data.setdefault(key, {})
