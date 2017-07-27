@@ -745,8 +745,9 @@ def updateFeatureSets(force_update=False, platform='android', config=''):
     filenames = [fname for fname in all_filenames if force_update or derivativeIsOld(fname, '{}.fsets.{}.pickle'.format('{}', platform))]
     overall_feature_count = 0
     with Timer() as t:
-        for feature_count in tqdm(pool.imap_unordered(partial(updateFeatureSetsPickleFromCiSamplesPickle, platform, config), filenames), total=len(filenames)):
-            overall_feature_count += feature_count
+        with terminatingPool(False) as pool:
+            for feature_count in tqdm(pool.imap_unordered(partial(updateFeatureSetsPickleFromCiSamplesPickle, platform, config), filenames), total=len(filenames)):
+                overall_feature_count += feature_count
 
     pool.close()
     print "Generated {} rows of features from {}/{} files in {:.1f}s".format(overall_feature_count, len(filenames), len(all_filenames), t.elapsed)
