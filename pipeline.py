@@ -59,6 +59,9 @@ def terminatingPool(use_processes=True):
 
     try:
         yield pool
+    except KeyboardInterrupt:
+        print 'KeyboardInterrupt: stopping pool.'
+        pass
     finally:
         pool.terminate()
 
@@ -655,6 +658,8 @@ class PreparedTSD(object):
 def print_exceptions():
     try:
         yield
+    except KeyboardInterrupt:
+        print 'KeyboardInterrupt: not printing traceback'
     except:
         import traceback
         traceback.print_exc()
@@ -755,7 +760,9 @@ def updateFeatureSets(force_update=False, platform='android', config=''):
 def getFeatureSetsFromAllTrainableTSDs(platform, config='', use_processes=True):
     filenames = glob.glob('./data/trusted_tsd.*.jsonl')
     with terminatingPool(use_processes) as pool:
-        return list(tqdm(pool.imap_unordered(partial(getFeatureSetFromTrainableTSDFile, platform, config), filenames), total=len(filenames)))
+        return list(
+            tqdm(pool.imap_unordered(partial(getFeatureSetFromTrainableTSDFile, platform, config), filenames),
+                total=len(filenames), desc='loading data/trusted_tsd.*.jsonl'))
 
 def getReportedActivityTypeWithOverrides(tsd):
     if tsd.reportedActivityType == 4 and 'run' in tsd.notes:
@@ -787,7 +794,7 @@ def getFeatureSetsFromTrustedEventsPickle(platform, config):
         tsds = pickle.load(f)
 
     fsets = []
-    for tsd in tqdm(tsds):
+    for tsd in tqdm(tsds, './trusted_tsds.pickle -> fsets'):
         fset = LabeledFeatureSet.fromTSD(tsd, forest, event_indices=tsd.trustedEventIndices)
         fset.forestConfigStr = config
         fset.forestConfigHash = sha256_sorted_json(json.loads(config))
@@ -812,7 +819,7 @@ def loadAllFeatureSets(platform, seed, fraction, include_crowd_data, use_process
         filenames = random.sample(filenames, max(1, int(len(filenames) * fraction)))
 
     with Timer() as t:
-        for filename in filenames:
+        for filename in tqdm(filenames, desc='loading features'):
             sets = loadFeatureSets(filename)
             if len(sets) > 0 and sets[0].reportedActivityType not in exclude_labels:
                 all_sets += sets
@@ -1040,7 +1047,7 @@ def loadModelAndTestAgainstTSDs(configPath, fraction=1.0, seed=None):
             sorted_files = sorted(tsd_files, key=lambda filename: os.path.getsize(filename), reverse=True)
 
             prediction_count = 0
-            for predictions in tqdm(pool.imap_unordered(partial(predictTSDFileWithFilters, configPath), sorted_files), total=len(sorted_files)):
+            for predictions, filename in tqdm(izip(pool.imap(partial(predictTSDFileWithFilters, configPath), sorted_files), sorted_files), total=len(sorted_files)):
                 for prediction in predictions:
                     try:
                         reported_type, old_type, fresh_type = prediction
@@ -1054,9 +1061,13 @@ def loadModelAndTestAgainstTSDs(configPath, fraction=1.0, seed=None):
                     fresh_confusion.setdefault(confusion_key, 0)
                     fresh_confusion[confusion_key] += 1
 
+                    if confusion_key == (2, 2):
+                        print filename
+
                     confusion_key = (reported_type, old_type)
                     old_confusion.setdefault(confusion_key, 0)
                     old_confusion[confusion_key] += 1
+
 
     print "Got {} predictions from {} TSDs in {:.1f}s".format(prediction_count, len(tsd_files), t.elapsed)
 
@@ -1162,40 +1173,178 @@ def dispatchCommand(command, options):
     else:
         raise ValueError("Unknown command: {}".format(command))
 
-def getPipelineParser():
-    import argparse
-    parser = argparse.ArgumentParser(description="run a pipeline command")
-    parser.add_argument('command', metavar='CMD', type=str)
-    parser.add_argument('-p', '--platform', dest='platform', required=True, choices=['ios', 'android'])
-    parser.add_argument('-f', '--force', dest='force_update', action='store_true', default=False)
-    parser.add_argument('--exclude-labels', dest='exclude_labels', type=str, default='9')
-    parser.add_argument('--no-split', dest='split', default=True, action='store_false')
-    parser.add_argument('-c', '--config', dest='config_filename', metavar='CONFIG.JSON', default=None)
-    parser.add_argument('-s', '--seed', dest='seed', default=None)
-    parser.add_argument('--sample-fraction', dest='sample_fraction', default=None, type=float)
-    parser.add_argument('--sample-count', dest='sample_count', default=64, type=int)
-    parser.add_argument('--sampling-rate-hz', dest='sampling_rate_hz', default=21., type=float)
-    parser.add_argument('--use-threads', dest='use_processes', default=True, action='store_false')
+def comma_separated_integers(line):
+    return [int(val) for val in line.split(',')]
 
-    parser.add_argument('-P', '--production', dest='build_to_production', default=False, action='store_true')
+def indented_json(obj, indent=2):
+    prefix = ' ' * indent
+    serialized = json.dumps(obj, indent=indent, sort_keys=True)
+    return ''.join(prefix+line for line in serialized.splitlines(True))
 
-    parser.add_argument('--train-sample-count-multiple', dest='sample_count_multiple', default=None, type=float)
-    parser.add_argument('--train-active-var-count', dest='active_var_count', default=None, type=int)
-    parser.add_argument('--train-max-tree-count', dest='max_tree_count', default=None, type=int)
-    parser.add_argument('--train-epsilon', dest='epsilon', default=None, type=float)
+class PipelineCommandDispatcher(object):
 
-    parser.add_argument('--exclude-crowd-data', dest='exclude_crowd_data', action='store_true', default=False)
+    def __init__(self, argv=None):
+        self.argv = argv
 
-    return parser
+    def dispatchUpdateFeatures(self, options):
 
+        # defaults
+        config_json = {
+            'sampling': {
+                'sample_count': 64,
+                'sampling_rate_hz': 21,
+            }
+        }
+
+        # load from file
+        if options.config_filename is not None:
+            with open(options.config_filename) as f:
+                loaded = json.load(f)
+            config_json['sampling'].update(loaded['sampling'])
+
+        # override with options, if specified
+        for k in ('sample_count', 'sampling_rate_hz'):
+            v = getattr(options, k)
+            if v is not None:
+                config_json['sampling'][k] = v
+
+        print "Updating features with configuration:"
+        print indented_json(config_json)
+
+        return updateFeatureSets(
+            force_update=options.force_update,
+            platform=options.platform,
+            config=json.dumps(config_json)
+        )
+
+    def dispatchUpdateSamples(self, options):
+        return updateSamplePickles(force_update=options.force_update)
+
+    def dispatchTest(self, options):
+        return loadModelAndTestAgainstTSDs(
+            options.config_filename,
+            fraction=options.fraction,
+            seed=options.seed
+        )
+
+    def dispatchGraphFeatures(self, options):
+        from feature_graph import graphFeaturesFromPickles
+        return graphFeaturesFromPickles(
+            labels=options.labels,
+            platform=options.platform,
+            seed=options.seed,
+            fraction=options.fraction
+        )
+
+    def _forest_dir(self, platform, build_to_production):
+        if build_to_production:
+            # Production models go in ActivityPredictor/<platform>/config.json
+            predictor_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'ActivityPredictor'))
+            forest_dir = os.path.join(predictor_dir, 'models', platform)
+        else:
+            forest_dir = os.path.join(os.path.dirname(__file__), 'models', platform)
+            try: os.makedirs(forest_dir)
+            except: pass
+        return forest_dir
+
+    def dispatchTrain(self, options):
+        # load default values from function signature
+        info = inspect.getargspec(ModelBuilder.__init__)
+        builder_kwargs = { k: v for k, v in izip(info.args[-len(info.defaults):], info.defaults) }
+
+        # override defaults with options from command line
+        for k in ('sample_count_multiple', 'active_var_count', 'max_tree_count', 'epsilon'):
+            if getattr(options, k) is not None:
+                builder_kwargs[k] = getattr(options, k)
+
+        print "Building model with configuration: "
+        print ''.join('  '+line for line in json.dumps(builder_kwargs, indent=2, sort_keys=True).splitlines(True))
+
+        if options.output_dir is None:
+            options.output_dir = self._forest_dir(options.platform, options.build_to_production)
+
+        return buildModelFromFeatureSetPickles(
+            output_dir=options.output_dir,
+            use_processes=True,
+            split=options.split,
+            fraction=options.fraction,
+            exclude_labels=options.exclude_labels,
+            include_crowd_data=not options.exclude_crowd_data,
+            platform=options.platform,
+            seed=options.seed,
+            builder_kwargs=builder_kwargs
+        )
+
+    def dispatch(self, raise_exceptions=False):
+        parser = self._get_parser()
+        args = parser.parse_args()
+
+        # Hack: ask Numpy to crash on NaNs or other crazy stuff, rather
+        # than silently soldier on.
+        np.seterr(all='raise')
+
+        try:
+            return args.dispatch(args)
+        except KeyboardInterrupt:
+            if raise_exceptions:
+                raise
+            else:
+                return None
+
+    def _get_parser(self):
+        import argparse
+        parser = argparse.ArgumentParser(description="run a pipeline command")
+        parser.add_argument('-s', '--seed', dest='seed', default=None)
+        parser.add_argument('-p', '--platform', dest='platform', required=True, choices=['ios', 'android'])
+        parser.add_argument('--slow', '--single-process', dest='single_process', default=False, action='store_true',
+            help='Do not parallelize; run in single process. Useful for debugging.')
+
+        subparsers = parser.add_subparsers(help='Commands')
+
+        updateSamples = subparsers.add_parser('updateSamples')
+        updateSamples.set_defaults(dispatch=self.dispatchUpdateSamples)
+        updateSamples.add_argument('-f', '--force', dest='force_update', action='store_true', default=False,
+            help='Generate new derivatives even if they appear to be up to date')
+
+        updateFeatures = subparsers.add_parser('updateFeatures')
+        updateFeatures.set_defaults(dispatch=self.dispatchUpdateFeatures)
+        updateFeatures.add_argument('-c', '--config', dest='config_filename', metavar='CONFIG.JSON', default=None,
+            help='Load sample count and sampling rate from specified `config.json`')
+        updateFeatures.add_argument('--sample-count', dest='sample_count', default=None, type=int)
+        updateFeatures.add_argument('--sampling-rate-hz', dest='sampling_rate_hz', default=None, type=float)
+        updateFeatures.add_argument('-f', '--force', dest='force_update', action='store_true', default=False,
+            help='Generate new derivatives even if they appear to be up to date')
+
+        graphFeatures = subparsers.add_parser('graphFeatures')
+        graphFeatures.set_defaults(dispatch=self.dispatchGraphFeatures)
+        graphFeatures.add_argument('-F', '--fraction', dest='fraction', default=None, type=float,
+            help='Graph a fraction of available feature values. Control randomness with -s <seed>.')
+        graphFeatures.add_argument('-l', '--labels', dest='labels',
+            default=None, type=comma_separated_integers, required=True)
+
+        train = subparsers.add_parser('train', help='Use generated features to train a new model')
+        train.set_defaults(dispatch=self.dispatchTrain)
+        train.add_argument('-o', '--output-dir', dest='output_dir', metavar='OUTDIR', default=None)
+        train.add_argument('--sample-count-multiple', dest='sample_count_multiple', default=None, type=float)
+        train.add_argument('--active-var-count', dest='active_var_count', default=None, type=int)
+        train.add_argument('--max-tree-count', dest='max_tree_count', default=None, type=int)
+        train.add_argument('--epsilon', dest='epsilon', default=None, type=float)
+        train.add_argument('--no-split', dest='split', default=True, action='store_false')
+        train.add_argument('--exclude-labels', dest='exclude_labels', type=comma_separated_integers, default=[9])
+        train.add_argument('-P', '--production', dest='build_to_production', default=False, action='store_true')
+        train.add_argument('--exclude-crowd-data', dest='exclude_crowd_data', action='store_true', default=False)
+        train.add_argument('-F', '--fraction', dest='fraction', default=1.0, type=float,
+            help='Train against a fraction of feature sets, sampled without replacement. Control randomness with -s <seed>.')
+
+        test = subparsers.add_parser('test', help='Test a built model against TSDs')
+        test.set_defaults(dispatch=self.dispatchTest)
+        test.add_argument('-c', '--config', '--model', dest='config_filename',
+            metavar='CONFIG.JSON', required=True,
+            help='Path to `config.json` for built model to load')
+        test.add_argument('-F', '--fraction', dest='fraction', default=None, type=float,
+            help='Run tests on a fraction of TSDs, sampled without replacement. Control randomness with -s <seed>.')
+
+        return parser
 
 if __name__ == '__main__':
-
-    args = getPipelineParser().parse_args()
-    try:
-        dispatchCommand(args.command, args)
-    except ValueError as e:
-        if str(e).startswith('Unknown command'):
-            print str(e)
-        else:
-            raise
+    PipelineCommandDispatcher().dispatch()
